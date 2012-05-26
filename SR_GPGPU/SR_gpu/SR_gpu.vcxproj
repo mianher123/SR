@@ -151,9 +151,12 @@
     <ClCompile Include="SR.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="SR_kernel.cu">
+    <CudaCompile Include="SR_kernel_find_neighbor.cu" />
+    <CudaCompile Include="SR_kernel_start.cu" />
+    <CudaCompile Include="SR_kernel_up.cu">
       <FileType>Document</FileType>
     </CudaCompile>
+    <CudaCompile Include="SR_kernel_down.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="all_lib.h" />
