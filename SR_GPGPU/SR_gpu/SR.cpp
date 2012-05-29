@@ -1,10 +1,6 @@
 #include "all_lib.h"
 
 using namespace cv;
-
-void up(IplImage *, IplImage *);
-void copy(IplImage *, IplImage *);
-
 int main(void){
 	char *ImageName = "C:\\Users\\dada\\Desktop\\GPU_Image\\Koala.jpg";
 	//char *ImageName = "C:\\Users\\dada\\Desktop\\GPU_Image\\Flower.jpg";
@@ -13,7 +9,7 @@ int main(void){
 	pImg=cvLoadImage(ImageName, 1);
 	cvNamedWindow("ShowImage", 1); // create window
 	//cvShowImage("ShowImage", pImg); // show image
-	clock_t start, end;
+	clock_t start, end, Up, find, Down;
 	int w=pImg->width;
 	int h=pImg->height;
 	int bpp=pImg->nChannels;
@@ -54,56 +50,24 @@ int main(void){
 
 	start=clock();
 	/******* run 1.5x down sample *******/
+	//down(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h);
 	SR_kernel_down(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h);
+	Down=clock();
 	SR_kernel_up(aft_R, aft_G, aft_B, DownUp_R, DownUp_G, DownUp_B, w*2/3, h*2/3);
+	//up(aft_R, aft_G, aft_B, DownUp_R, DownUp_G, DownUp_B, w*2/3, h*2/3, w, h);
 	
 	/******* run 1.5x upsample *******/
+	Up=clock();
+	//up(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h, ww, hh);
 	SR_kernel_up(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h);
-	//FILE *fpR, *fpG, *fpB;
-	//char buf[10];
-	/*
-	fpR=fopen("D:\\L1_R.txt", "r");
-	fpG=fopen("D:\\L1_G.txt", "r");
-	fpB=fopen("D:\\L1_B.txt", "r");
 	
-	if( fpR==NULL || fpG==NULL || fpB==NULL )
-		printf("file open error\n");
-	for(int j=0; j<hh; ++j){
-		for(int i=0; i<ww; ++i){
-			fgets(buf, 10, fpR);
-			aft_R[j*ww +i]=atoi(buf);
-			fgets(buf, 10, fpG);
-			aft_G[j*ww +i]=atoi(buf);
-			fgets(buf, 10, fpB);
-			aft_B[j*ww +i]=atoi(buf);
-		}
-	
-	*/
-	
-	/*
-	fpR=fopen("D:\\L0_R.txt", "r");
-	fpG=fopen("D:\\L0_G.txt", "r");
-	fpB=fopen("D:\\L0_B.txt", "r");
-	
-	if( fpR==NULL || fpG==NULL || fpB==NULL )
-		printf("file open error\n");
-	for(int j=0; j<h; ++j){
-		for(int i=0; i<w; ++i){
-			fgets(buf, 10, fpR);
-			DownUp_R[j*w +i]=atoi(buf);
-			fgets(buf, 10, fpG);
-			DownUp_G[j*w +i]=atoi(buf);
-			fgets(buf, 10, fpB);
-			DownUp_B[j*w +i]=atoi(buf);
-		}
-	}
-	*/
 
 	/*******************************************************
 		ori_R store original image
 		aft_R store 1.5x upsample image
 		DownUp_R store down sample then upsample image
 	*******************************************************/
+	
 	for(int j=0; j<h; ++j){
 		for(int i=0; i<w; ++i){
 			H_R[j*w +i]=ori_R[j*w +i]-DownUp_R[j*w +i];
@@ -112,23 +76,22 @@ int main(void){
 		}
 	}
 	
+	find=clock();
 	SR_kernel_find_neighbor(aft_R, aft_G, aft_B,
 							DownUp_R, DownUp_G, DownUp_B,
 							H_R, H_G, H_B,
 							ans_R, ans_G, ans_B,
 							w, h, ww, hh);
-	
 	end=clock();
+
+	std::cout << std::dec << "Down time: " << 1000.0*(double)(Down-start)/(double)CLOCKS_PER_SEC << " ms" << std::endl;
+	std::cout << std::dec << "DownUp time: " << 1000.0*(double)(Up-Down)/(double)CLOCKS_PER_SEC << " ms" << std::endl;
+	std::cout << std::dec << "up time: " << 1000.0*(double)(find-Up)/(double)CLOCKS_PER_SEC << " ms" << std::endl;
+	std::cout << std::dec << "find neighbor time: " << 1000.0*(double)(end-find)/(double)CLOCKS_PER_SEC << " ms" << std::endl;
 	std::cout << std::dec << "process time: " << 1000.0*(double)(end-start)/(double)CLOCKS_PER_SEC << " ms" << std::endl;
+	//printf("clock per sec=%d\n", CLOCKS_PER_SEC);
 	pImg2=cvCreateImage(cvSize(ww, hh), pImg->depth, pImg->nChannels);
-	/*
-	for(int j=0; j<hh; ++j){
-		for(int i=0; i<ww; ++i){
-			if( ans_R[j*ww+i]==1139 )
-				printf("at (%d, %d) error\n", j, i);
-		}
-	}
-	*/
+	
 	for(int j=0; j<hh; ++j){ // copy the ans to pImg2
 		for(int i=0; i<ww; ++i){
 			
@@ -152,7 +115,6 @@ int main(void){
 	//char *img_save="C:\\Users\\dada\\Desktop\\GPU_Image\\Koala_cpu.jpg";
 	//cvSaveImage(img_save, pImg2);
 	cvShowImage("ShowImage", pImg2);
-	//SR_kernel_end();
 	waitKey(0);
 
 	cvDestroyWindow("ShowImage");

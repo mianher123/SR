@@ -49,10 +49,9 @@ __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, 
 		int min_pos_R[2];
 		int min_pos_G[2];
 		int min_pos_B[2];
-		int dist;
 		
-		for(int j=-3; j<=3; ++j){ // find neighbor in 3*3 block
-			for(int i=-3; i<=3; ++i){
+		for(int j=-1; j<=1; ++j){ // find neighbor in 3*3 block
+			for(int i=-1; i<=1; ++i){
 				if( low_x+i>=0 && low_x+i<=w-3 && low_y+j>=0 && low_y+j<=h-3 ){
 					min_R=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_R, min_pos_R, TIR, TLR);
 					min_G=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_G, min_pos_G, TIG, TLG);
@@ -121,20 +120,14 @@ void SR_kernel_find_neighbor(
 	cudaBindTextureToArray(THG, d_HG);
 	cudaBindTextureToArray(THB, d_HB);
 
-	int threads=64;
+	int threads=1024;
 	int blocks=64;
-	clock_t start, end;
-	start=clock();
 	for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
 		find_neighbor<<<blocks, threads>>>(i*threads*blocks, d_ansR, d_ansG, d_ansB, w, h, ww, hh);
 		
 		//printf("error1: %s\n", cudaGetErrorString(cudaPeekAtLastError()));
 		//printf("error2: %s\n", cudaGetErrorString(cudaThreadSynchronize()));
 	}
-	
-	
-	end=clock();
-	printf("find neighbor finish, time=%d\n", end-start);
 
 	cudaMemcpy(ans_R, d_ansR, ww*hh*sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(ans_G, d_ansG, ww*hh*sizeof(int), cudaMemcpyDeviceToHost);

@@ -148,7 +148,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="down_host.cpp" />
     <ClCompile Include="SR.cpp" />
+    <ClCompile Include="up_host.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="SR_kernel_find_neighbor.cu" />
