@@ -9,56 +9,43 @@ texture<int, 1, cudaReadModeElementType> TB;
 texture<int ,1, cudaReadModeElementType> TansR;
 texture<int ,1, cudaReadModeElementType> TansG;
 texture<int ,1, cudaReadModeElementType> TansB;
-texture<float, 1, cudaReadModeElementType> Tu0;
-texture<float, 1, cudaReadModeElementType> Tu1;
 
 //extern __shared__ int row[];
+__constant__ float d_u0[5];
+__constant__ float d_u1[5];
+
+extern "C" void set_filter_up(float *u0, float *u1){
+	cudaMemcpyToSymbol(d_u0, u0, 5 * sizeof(float));
+	cudaMemcpyToSymbol(d_u1, u1, 5 * sizeof(float));
+}
 
 __device__ int convolusion_col(int index, int ww, int hh, int *ans, int *row0, int *row1){
 	int e_aft=0;
 	int temp[2];
 	// i==0
-	temp[0]=(int)(tex1Dfetch(Tu0, 2)*row0[0]+tex1Dfetch(Tu0, 3)*row0[1]+tex1Dfetch(Tu0, 4)*row0[2]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 2)*row1[0]+tex1Dfetch(Tu1, 3)*row1[1]+tex1Dfetch(Tu1, 4)*row1[2]);
+	temp[0]=(int)(d_u0[2]*row0[0]+d_u0[3]*row0[1]+d_u0[4]*row0[2]);
+	temp[1]=(int)(d_u1[2]*row1[0]+d_u1[3]*row1[1]+d_u1[4]*row1[2]);
 	ans[index]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==1
-	temp[0]=(int)(tex1Dfetch(Tu0, 1)*row0[0]+tex1Dfetch(Tu0, 2)*row0[1]+tex1Dfetch(Tu0, 3)*row0[2]+tex1Dfetch(Tu0, 4)*row0[3]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 1)*row1[0]+tex1Dfetch(Tu1, 2)*row1[1]+tex1Dfetch(Tu1, 3)*row1[2]+tex1Dfetch(Tu1, 4)*row1[3]);
+	temp[0]=(int)(d_u0[1]*row0[0]+d_u0[2]*row0[1]+d_u0[3]*row0[2]+d_u0[4]*row0[3]);
+	temp[1]=(int)(d_u1[1]*row1[0]+d_u1[2]*row1[1]+d_u1[3]*row1[2]+d_u1[4]*row1[3]);
 	ans[ww +index]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==hh-2
-	temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[hh-4]+tex1Dfetch(Tu0, 1)*row0[hh-3]+tex1Dfetch(Tu0, 2)*row0[hh-2]+tex1Dfetch(Tu0, 3)*row0[hh-1]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[hh-4]+tex1Dfetch(Tu1, 1)*row1[hh-3]+tex1Dfetch(Tu1, 2)*row1[hh-2]+tex1Dfetch(Tu1, 3)*row1[hh-1]);
+	temp[0]=(int)(d_u0[0]*row0[hh-4]+d_u0[1]*row0[hh-3]+d_u0[2]*row0[hh-2]+d_u0[3]*row0[hh-1]);
+	temp[1]=(int)(d_u1[0]*row1[hh-4]+d_u1[1]*row1[hh-3]+d_u1[2]*row1[hh-2]+d_u1[3]*row1[hh-1]);
 	ans[(hh-2)*ww +index]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==hh-1
-	temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[hh-3]+tex1Dfetch(Tu0, 1)*row0[hh-2]+tex1Dfetch(Tu0, 2)*row0[hh-1]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[hh-3]+tex1Dfetch(Tu1, 1)*row1[hh-2]+tex1Dfetch(Tu1, 2)*row1[hh-1]);
+	temp[0]=(int)(d_u0[0]*row0[hh-3]+d_u0[1]*row0[hh-2]+d_u0[2]*row0[hh-1]);
+	temp[1]=(int)(d_u1[0]*row1[hh-3]+d_u1[1]*row1[hh-2]+d_u1[2]*row1[hh-1]);
 	ans[(hh-1)*ww +index]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
-	
+	#pragma unroll
 	for(int i=2; i<hh-2; ++i){
-		/*
-		if(i==0){
-			temp[0]=(int)(tex1Dfetch(Tu0, 2)*row0[0]+tex1Dfetch(Tu0, 3)*row0[1]+tex1Dfetch(Tu0, 4)*row0[2]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 2)*row1[0]+tex1Dfetch(Tu1, 3)*row1[1]+tex1Dfetch(Tu1, 4)*row1[2]);
-		}
-		else if(i==1){
-			temp[0]=(int)(tex1Dfetch(Tu0, 1)*row0[0]+tex1Dfetch(Tu0, 2)*row0[1]+tex1Dfetch(Tu0, 3)*row0[2]+tex1Dfetch(Tu0, 4)*row0[3]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 1)*row1[0]+tex1Dfetch(Tu1, 2)*row1[1]+tex1Dfetch(Tu1, 3)*row1[2]+tex1Dfetch(Tu1, 4)*row1[3]);
-		}
-		else if(i==hh-2){
-			temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[hh-4]+tex1Dfetch(Tu0, 1)*row0[hh-3]+tex1Dfetch(Tu0, 2)*row0[hh-2]+tex1Dfetch(Tu0, 3)*row0[hh-1]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[hh-4]+tex1Dfetch(Tu1, 1)*row1[hh-3]+tex1Dfetch(Tu1, 2)*row1[hh-2]+tex1Dfetch(Tu1, 3)*row1[hh-1]);
-		}
-		else if(i==hh-1){
-			temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[hh-3]+tex1Dfetch(Tu0, 1)*row0[hh-2]+tex1Dfetch(Tu0, 2)*row0[hh-1]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[hh-3]+tex1Dfetch(Tu1, 1)*row1[hh-2]+tex1Dfetch(Tu1, 2)*row1[hh-1]);
-		}*/
-		
-		temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[i-2]+tex1Dfetch(Tu0, 1)*row0[i-1]+tex1Dfetch(Tu0, 2)*row0[i]+tex1Dfetch(Tu0, 3)*row0[i+1]+tex1Dfetch(Tu0, 4)*row0[i+2]);
-		temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[i-2]+tex1Dfetch(Tu1, 1)*row1[i-1]+tex1Dfetch(Tu1, 2)*row1[i]+tex1Dfetch(Tu1, 3)*row1[i+1]+tex1Dfetch(Tu1, 4)*row1[i+2]);
+		temp[0]=(int)(d_u0[0]*row0[i-2]+d_u0[1]*row0[i-1]+d_u0[2]*row0[i]+d_u0[3]*row0[i+1]+d_u0[4]*row0[i+2]);
+		temp[1]=(int)(d_u1[0]*row1[i-2]+d_u1[1]*row1[i-1]+d_u1[2]*row1[i]+d_u1[3]*row1[i+1]+d_u1[4]*row1[i+2]);
 		
 		ans[i*ww +index]=temp[0]+temp[1];
 		e_aft+=(temp[0]+temp[1]);
@@ -69,71 +56,32 @@ __device__ int convolusion_col(int index, int ww, int hh, int *ans, int *row0, i
 __device__ int convolusion_row(int a_index, int w, int ww, int *ans, int index, int *row0, int *row1){
 	int e_aft=0;
 	int temp[2];
+	
 	// i==0
-	temp[0]=(int)(tex1Dfetch(Tu0, 2)*row0[0]+tex1Dfetch(Tu0, 3)*row0[1]+tex1Dfetch(Tu0, 4)*row0[2]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 2)*row1[0]+tex1Dfetch(Tu1, 3)*row1[1]+tex1Dfetch(Tu1, 4)*row1[2]);
+	temp[0]=(int)(d_u0[2]*row0[0]+d_u0[3]*row0[1]+d_u0[4]*row0[2]);
+	temp[1]=(int)(d_u1[2]*row1[0]+d_u1[3]*row1[1]+d_u1[4]*row1[2]);
 	ans[a_index*ww]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==1
-	temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[ww-4]+tex1Dfetch(Tu0, 1)*row0[ww-3]+tex1Dfetch(Tu0, 2)*row0[ww-2]+tex1Dfetch(Tu0, 3)*row0[ww-1]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[ww-4]+tex1Dfetch(Tu1, 1)*row1[ww-3]+tex1Dfetch(Tu1, 2)*row1[ww-2]+tex1Dfetch(Tu1, 3)*row1[ww-1]);
+	temp[0]=(int)(d_u0[0]*row0[ww-4]+d_u0[1]*row0[ww-3]+d_u0[2]*row0[ww-2]+d_u0[3]*row0[ww-1]);
+	temp[1]=(int)(d_u1[0]*row1[ww-4]+d_u1[1]*row1[ww-3]+d_u1[2]*row1[ww-2]+d_u1[3]*row1[ww-1]);
 	ans[a_index*ww +1]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==ww-2
-	temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[ww-4]+tex1Dfetch(Tu0, 1)*row0[ww-3]+tex1Dfetch(Tu0, 2)*row0[ww-2]+tex1Dfetch(Tu0, 3)*row0[ww-1]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[ww-4]+tex1Dfetch(Tu1, 1)*row1[ww-3]+tex1Dfetch(Tu1, 2)*row1[ww-2]+tex1Dfetch(Tu1, 3)*row1[ww-1]);
+	temp[0]=(int)(d_u0[0]*row0[ww-4]+d_u0[1]*row0[ww-3]+d_u0[2]*row0[ww-2]+d_u0[3]*row0[ww-1]);
+	temp[1]=(int)(d_u1[0]*row1[ww-4]+d_u1[1]*row1[ww-3]+d_u1[2]*row1[ww-2]+d_u1[3]*row1[ww-1]);
 	ans[a_index*ww +ww-2]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==ww-1
-	temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[ww-3]+tex1Dfetch(Tu0, 1)*row0[ww-2]+tex1Dfetch(Tu0, 2)*row0[ww-1]);
-	temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[ww-3]+tex1Dfetch(Tu1, 1)*row1[ww-2]+tex1Dfetch(Tu1, 2)*row1[ww-1]);
+	temp[0]=(int)(d_u0[0]*row0[ww-3]+d_u0[1]*row0[ww-2]+d_u0[2]*row0[ww-1]);
+	temp[1]=(int)(d_u1[0]*row1[ww-3]+d_u1[1]*row1[ww-2]+d_u1[2]*row1[ww-1]);
 	ans[a_index*ww +ww-1]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
+	
+	#pragma unroll
 	for(int i=2; i<ww-2; ++i){
-		/*
-		if(i==0){
-			temp[0]=(int)(tex1Dfetch(Tu0, 2)*row0[0]+tex1Dfetch(Tu0, 3)*row0[1]+tex1Dfetch(Tu0, 4)*row0[2]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 2)*row1[0]+tex1Dfetch(Tu1, 3)*row1[1]+tex1Dfetch(Tu1, 4)*row1[2]);
-		}
-		else if(i==1){
-			temp[0]=(int)(tex1Dfetch(Tu0, 1)*row0[0]+tex1Dfetch(Tu0, 2)*row0[1]+tex1Dfetch(Tu0, 3)*row0[2]+tex1Dfetch(Tu0, 4)*row0[3]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 1)*row1[0]+tex1Dfetch(Tu1, 2)*row1[1]+tex1Dfetch(Tu1, 3)*row1[2]+tex1Dfetch(Tu1, 4)*row1[3]);
-		}
-		else if(i==ww-2){
-			temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[ww-4]+tex1Dfetch(Tu0, 1)*row0[ww-3]+tex1Dfetch(Tu0, 2)*row0[ww-2]+tex1Dfetch(Tu0, 3)*row0[ww-1]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[ww-4]+tex1Dfetch(Tu1, 1)*row1[ww-3]+tex1Dfetch(Tu1, 2)*row1[ww-2]+tex1Dfetch(Tu1, 3)*row1[ww-1]);
-		}
-		else if(i==ww-1){
-			temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[ww-3]+tex1Dfetch(Tu0, 1)*row0[ww-2]+tex1Dfetch(Tu0, 2)*row0[ww-1]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[ww-3]+tex1Dfetch(Tu1, 1)*row1[ww-2]+tex1Dfetch(Tu1, 2)*row1[ww-1]);
-		}*/
-		
-		temp[0]=(int)(tex1Dfetch(Tu0, 0)*row0[i-2]+tex1Dfetch(Tu0, 1)*row0[i-1]+tex1Dfetch(Tu0, 2)*row0[i]+tex1Dfetch(Tu0, 3)*row0[i+1]+tex1Dfetch(Tu0, 4)*row0[i+2]);
-		temp[1]=(int)(tex1Dfetch(Tu1, 0)*row1[i-2]+tex1Dfetch(Tu1, 1)*row1[i-1]+tex1Dfetch(Tu1, 2)*row1[i]+tex1Dfetch(Tu1, 3)*row1[i+1]+tex1Dfetch(Tu1, 4)*row1[i+2]);
-		
-		
-		/*
-		if(i==0){
-			temp[0]=(int)(tex1Dfetch(Tu0, 2)*row[index]+tex1Dfetch(Tu0, 3)*row[index +1]+tex1Dfetch(Tu0, 4)*row[index +2]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 2)*row[index+ww]+tex1Dfetch(Tu1, 3)*row[index+ww +1]+tex1Dfetch(Tu1, 4)*row[index+ww +2]);
-		}
-		else if(i==1){
-			temp[0]=(int)(tex1Dfetch(Tu0, 1)*row[index]+tex1Dfetch(Tu0, 2)*row[index +1]+tex1Dfetch(Tu0, 3)*row[index +2]+tex1Dfetch(Tu0, 4)*row[index +3]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 1)*row[index+ww]+tex1Dfetch(Tu1, 2)*row[index+ww +1]+tex1Dfetch(Tu1, 3)*row[index+ww +2]+tex1Dfetch(Tu1, 4)*row[index+ww +3]);
-		}
-		else if(i==ww-2){
-			temp[0]=(int)(tex1Dfetch(Tu0, 0)*row[index +ww-4]+tex1Dfetch(Tu0, 1)*row[index +ww-3]+tex1Dfetch(Tu0, 2)*row[index +ww-2]+tex1Dfetch(Tu0, 3)*row[index +ww-1]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 0)*row[index+ww +ww-4]+tex1Dfetch(Tu1, 1)*row[index+ww +ww-3]+tex1Dfetch(Tu1, 2)*row[index+ww +ww-2]+tex1Dfetch(Tu1, 3)*row[index+ww +ww-1]);
-		}
-		else if(i==ww-1){
-			temp[0]=(int)(tex1Dfetch(Tu0, 0)*row[index +ww-3]+tex1Dfetch(Tu0, 1)*row[index +ww-2]+tex1Dfetch(Tu0, 2)*row[index +ww-1]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 0)*row[index+ww +ww-3]+tex1Dfetch(Tu1, 1)*row[index+ww +ww-2]+tex1Dfetch(Tu1, 2)*row[index+ww +ww-1]);
-		}
-		else{
-			temp[0]=(int)(tex1Dfetch(Tu0, 0)*row[index +i-2]+tex1Dfetch(Tu0, 1)*row[index +i-1]+tex1Dfetch(Tu0, 2)*row[index +i]+tex1Dfetch(Tu0, 3)*row[index +i+1]+tex1Dfetch(Tu0, 4)*row[index +i+2]);
-			temp[1]=(int)(tex1Dfetch(Tu1, 0)*row[index+ww +i-2]+tex1Dfetch(Tu1, 1)*row[index+ww +i-1]+tex1Dfetch(Tu1, 2)*row[index+ww +i]+tex1Dfetch(Tu1, 3)*row[index+ww +i+1]+tex1Dfetch(Tu1, 4)*row[index+ww +i+2]);
-		}
-		*/
+		temp[0]=(int)(d_u0[0]*row0[i-2]+d_u0[1]*row0[i-1]+d_u0[2]*row0[i]+d_u0[3]*row0[i+1]+d_u0[4]*row0[i+2]);
+		temp[1]=(int)(d_u1[0]*row1[i-2]+d_u1[1]*row1[i-1]+d_u1[2]*row1[i]+d_u1[3]*row1[i+1]+d_u1[4]*row1[i+2]);
 		ans[a_index*ww +i]=temp[0]+temp[1];
 		e_aft+=(temp[0]+temp[1]);
 	}
@@ -147,6 +95,7 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		int e_aft;
 		float R_rate, G_rate, B_rate;
 		int index=(round+tid)*h;
+		#pragma unroll
 		for(int i=0; i<h; ++i){ // compute weight
 			R_ori+=tex1Dfetch(TansR, index +i);
 			G_ori+=tex1Dfetch(TansG, index +i);
@@ -157,10 +106,11 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 			B_ori+=ans_B[i*ww +index];
 			*/
 		}
-		int row0[405];
-		int row1[405];
+		int row0[1080];
+		int row1[1080];
 		// red
-		for(int i=0; i<405; ++i){
+		#pragma unroll
+		for(int i=0; i<hh; ++i){
 			
 			if(i%3==0) row0[i]=tex1Dfetch(TansR, index +i*2/3);
 			else row0[i]=0;
@@ -179,7 +129,8 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		e_aft=convolusion_col(round+tid, ww, hh, ans_R, row0, row1);
 		R_rate=(float)e_aft/(float)(R_ori*3/2);
 		// green
-		for(int i=0; i<405; ++i){
+		#pragma unroll
+		for(int i=0; i<hh; ++i){
 			
 			if(i%3==0) row0[i]=tex1Dfetch(TansG, index +i*2/3);
 			else row0[i]=0;
@@ -198,7 +149,8 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		e_aft=convolusion_col(round+tid, ww, hh, ans_G, row0, row1);
 		G_rate=(float)e_aft/(float)(G_ori*3/2);
 		// blue
-		for(int i=0; i<405; ++i){
+		#pragma unroll
+		for(int i=0; i<hh; ++i){
 			
 			if(i%3==0) row0[i]=tex1Dfetch(TansB, index +i*2/3);
 			else row0[i]=0;
@@ -218,7 +170,8 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		B_rate=(float)e_aft/(float)(B_ori*3/2);
 		
 		index=round+tid;
-		for(int i=0; i<405; ++i){
+		#pragma unroll
+		for(int i=0; i<hh; ++i){
 			ans_R[i*ww +index]=(int)((float)ans_R[i*ww +index]/R_rate);
 			ans_G[i*ww +index]=(int)((float)ans_G[i*ww +index]/G_rate);
 			ans_B[i*ww +index]=(int)((float)ans_B[i*ww +index]/B_rate);
@@ -239,22 +192,25 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 
 __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int w, int h, int ww, int hh, int *temp_R, int *temp_G, int *temp_B){
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	//__shared__ int row[540*2*8];
 	if(round+tid<h){
 		//test[0]=1139;
 		int R_ori=0, G_ori=0, B_ori=0; // store weight of original img
 		int e_aft;
 		float R_rate, G_rate, B_rate;
 		int index=(round+tid)*w;
+		#pragma unroll
 		for(int i=0; i<w; ++i){ // compute weight
 			R_ori+=tex1Dfetch(TR, index +i);
 			G_ori+=tex1Dfetch(TG, index +i);
 			B_ori+=tex1Dfetch(TB, index +i);
 		}
 		
-		int row0[540];
-		int row1[540];
+		int row0[1920];
+		int row1[1920];
 		
 		// red
+		#pragma unroll
 		for(int i=0; i<ww; ++i){ // setup row
 			/*
 			if(i%3==0) row[threadIdx.x*ww*2 +i]=tex1Dfetch(TR, index +i*2/3);
@@ -274,6 +230,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		R_rate=(float)e_aft/(float)(R_ori*3/2);
 
 		// green
+		#pragma unroll
 		for(int i=0; i<ww; ++i){ // setup row
 			/*
 			if(i%3==0) row[threadIdx.x*ww*2 +i]=tex1Dfetch(TG, index +i*2/3);
@@ -294,6 +251,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		G_rate=(float)e_aft/(float)(G_ori*3/2);
 
 		// blue
+		#pragma unroll
 		for(int i=0; i<ww; ++i){ // setup row
 			/*
 			if(i%3==0) row[threadIdx.x*ww*2 +i]=tex1Dfetch(TB, index +i*2/3);
@@ -314,6 +272,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		B_rate=(float)e_aft/(float)(B_ori*3/2);
 		
 		index=(round+tid)*ww;
+		#pragma unroll
 		for(int i=0; i<ww; ++i){
 			temp_R[i*h +round+tid]=ans_R[index +i]=(int)((float)ans_R[index +i]/R_rate);
 			temp_G[i*h +round+tid]=ans_G[index +i]=(int)((float)ans_G[index +i]/G_rate);
@@ -335,19 +294,16 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 	__syncthreads();
 }
 
-void SR_kernel_up(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, int *aft_B, int w, int h){
+void SR_kernel_up(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, int *aft_B, int w, int h, int ww, int hh){
 	float u0[5]={-0.047, 0.6, 0.927, 0.119, -0.1};
 	float u1[5]={-0.1, 0.119, 0.927, 0.6, -0.047};
 	
 	int *d_ori_R, *d_ori_G, *d_ori_B;
 	int *d_ans_R, *d_ans_G, *d_ans_B;
 	int *temp_R, *temp_G, *temp_B;
-	int *d_u0, *d_u1;
 
-	int ww=w*3/2;
-	int hh=h*3/2;
-	clock_t s, e;
-	//s=clock();
+	//int ww=w*3/2;
+	//int hh=h*3/2;
 	cudaMalloc((void**)&d_ori_R, w*h*sizeof(int));
 	cudaMalloc((void**)&d_ori_G, w*h*sizeof(int));
 	cudaMalloc((void**)&d_ori_B, w*h*sizeof(int));
@@ -358,22 +314,14 @@ void SR_kernel_up(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, in
 	cudaMalloc((void**)&d_ans_G, ww*hh*sizeof(int));
 	cudaMalloc((void**)&d_ans_B, ww*hh*sizeof(int));
 	
-	cudaMalloc((void**)&d_u0, 5*sizeof(float));
-	cudaMalloc((void**)&d_u1, 5*sizeof(float));
-	
 	cudaMemcpy(d_ori_R, ori_R, w*h*sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_ori_G, ori_G, w*h*sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_ori_B, ori_B, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_u0, u0, 5*sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_u1, u1, 5*sizeof(float), cudaMemcpyHostToDevice);
 
 	cudaBindTexture(0, TR, d_ori_R);
 	cudaBindTexture(0, TG, d_ori_G);
 	cudaBindTexture(0, TB, d_ori_B);
-	cudaBindTexture(0, Tu0, d_u0);
-	cudaBindTexture(0, Tu1, d_u1);
-	//e=clock();
-	//printf("kernel_up cuda setup time=%d\n", e-s);
+	set_filter_up(u0, u1);
 
 	int threads=64;
 	int blocks=64;
@@ -388,14 +336,9 @@ void SR_kernel_up(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, in
 	for(int i=0; i<(ww-1)/(threads*blocks) +1; ++i) // a thread do a column
 		run_cuda_col<<<blocks, threads>>>(i*threads*blocks, d_ans_R, d_ans_G, d_ans_B, w, h, ww, hh);
 	
-	
-	//s=clock();
 	cudaMemcpy(aft_R, d_ans_R, ww*hh*sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(aft_G, d_ans_G, ww*hh*sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(aft_B, d_ans_B, ww*hh*sizeof(int), cudaMemcpyDeviceToHost);
-	//e=clock();
-
-	//printf("kernel_up cudaMemcpy time=%d\n", e-s);
 
 	
 	cudaUnbindTexture(TR);
@@ -414,7 +357,4 @@ void SR_kernel_up(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, in
 	cudaFree(temp_R);
 	cudaFree(temp_G);
 	cudaFree(temp_B);
-	
-	cudaFree(d_u0);
-	cudaFree(d_u1);
 }

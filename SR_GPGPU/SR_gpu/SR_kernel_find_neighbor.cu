@@ -18,10 +18,11 @@ __device__ int calc_dist(
 		int x, int y, int low_x, int low_y, int w, int ww, int min, int *pos,
 		texture<int, 2, cudaReadModeElementType> TI, texture<int, 2, cudaReadModeElementType> TL){
 	int dist=0;
-	
+	int dtex;
 	for(int j=0; j<3; ++j){
 		for(int i=0; i<3; ++i){
-			dist+=( tex2D(TI, x+i, y+j)-tex2D(TL, low_x+i, low_y+j) )*( tex2D(TI, x+i, y+j)-tex2D(TL, low_x+i, low_y+j) );
+			dtex=tex2D(TI, x+i, y+j)-tex2D(TL, low_x+i, low_y+j);
+			dist+=dtex*dtex;
 		}
 	}
 	
@@ -36,8 +37,7 @@ __device__ int calc_dist(
 __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, int w, int h, int ww, int hh){
 	int tid=blockDim.x * blockIdx.x + threadIdx.x;
 	//int tidy=blockDim.y * blockIdx.y + threadIdx.y;
-	
-	if( round+tid<(ww/3)*(hh/3) ){
+	if( round+tid<(hh/3)*(ww/3) ){
 		int x=((round+tid)%(ww/3))*3;
 		int y=((round+tid)/(ww/3))*3;
 		
@@ -54,8 +54,8 @@ __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, 
 			for(int i=-1; i<=1; ++i){
 				if( low_x+i>=0 && low_x+i<=w-3 && low_y+j>=0 && low_y+j<=h-3 ){
 					min_R=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_R, min_pos_R, TIR, TLR);
-					min_G=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_G, min_pos_G, TIG, TLG);
-					min_B=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_B, min_pos_B, TIB, TLB);
+					//min_G=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_G, min_pos_G, TIG, TLG);
+					//min_B=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_B, min_pos_B, TIB, TLB);
 				}
 			}
 		}
@@ -63,8 +63,8 @@ __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, 
 		for(int j=0; j<3; ++j){
 			for(int i=0; i<3; ++i){
 				dans_R[(y+j)*ww +x+i]=tex2D(THR, min_pos_R[0]+i, min_pos_R[1]+j);
-				dans_G[(y+j)*ww +x+i]=tex2D(THG, min_pos_G[0]+i, min_pos_G[1]+j);
-				dans_B[(y+j)*ww +x+i]=tex2D(THB, min_pos_B[0]+i, min_pos_B[1]+j);
+				dans_G[(y+j)*ww +x+i]=tex2D(THG, min_pos_R[0]+i, min_pos_R[1]+j);
+				dans_B[(y+j)*ww +x+i]=tex2D(THB, min_pos_R[0]+i, min_pos_R[1]+j);
 			}
 		}
 	}
@@ -122,6 +122,7 @@ void SR_kernel_find_neighbor(
 
 	int threads=1024;
 	int blocks=64;
+	//for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
 	for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
 		find_neighbor<<<blocks, threads>>>(i*threads*blocks, d_ansR, d_ansG, d_ansB, w, h, ww, hh);
 		
