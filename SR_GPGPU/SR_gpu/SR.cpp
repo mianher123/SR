@@ -18,28 +18,11 @@ int main(int argc, char** argv){
   
 	int w=540;
 	int h=405;
-
-   
     // load the AVI file
-    capture = cvCaptureFromAVI("C:\\Users\\dada\\Desktop\\GPU_Image\\SRvideo1.avi");
+	capture = cvCaptureFromAVI("C:\\Users\\dada\\Desktop\\GPU_Image\\SRvideo1.avi");
 
     // always check
-    if( !capture ) return 1;    
-   
-    // get fps, needed to set the delay
-    //fps = ( int )cvGetCaptureProperty( capture, CV_CAP_PROP_FPS );
-   
-    // display video
-    //cvNamedWindow( "video", 0 );
-   
-    //while( key != 'q' ) {
-
-    //}
-   
-    //free memory
-    //cvReleaseCapture( &capture );
-    //cvDestroyWindow( "video" );
-
+    if( !capture ) return 1;
 
 	// init GLUT and create Window
 	glutInit(&argc, argv);
@@ -87,16 +70,16 @@ void renderScene(void){
 	//uchar4* tex;
 
 	IplImage *pImg;
-	/* get a frame */
+	// get a frame 
     pImg = cvQueryFrame( capture );
        
-    /* always check */
+    // always check 
     if( !pImg ) printf("error\n");
 
 	//char *ImageName = "C:\\Users\\dada\\Desktop\\GPU_Image\\Koala.jpg";
 	//char *ImageName = "C:\\Users\\dada\\Desktop\\GPU_Image\\Flower.jpg";
 
-	IplImage *pImg2;
+	//IplImage *pImg2;
 	//pImg=cvLoadImage(ImageName, 1);
 	//cvNamedWindow("ShowImage", 1); // create window
 	//cvShowImage("ShowImage", pImg); // show image
@@ -113,28 +96,25 @@ void renderScene(void){
 	int hh=h*3/2;
 	printf("ori_w=%d, ori_h=%d, w=%d, h=%d, ww=%d, hh=%d\n", ori_w, ori_h, w, h, ww, hh);
 
-	int *ori_R=(int*)malloc(sizeof(int)*w*h);
-	int *ori_G=(int*)malloc(sizeof(int)*w*h);
-	int *ori_B=(int*)malloc(sizeof(int)*w*h);
+	unsigned char *ori_R=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
+	unsigned char *ori_G=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
+	unsigned char *ori_B=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
+	
+	unsigned char *DownUp_R=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
+	unsigned char *DownUp_G=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
+	unsigned char *DownUp_B=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
 
+	unsigned char *H_R=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
+	unsigned char *H_G=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
+	unsigned char *H_B=(unsigned char*)malloc(sizeof(unsigned char)*w*h);
 	
-
+	unsigned char *aft_R=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
+	unsigned char *aft_G=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
+	unsigned char *aft_B=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
 	
-	int *DownUp_R=(int*)malloc(sizeof(int)*w*h);
-	int *DownUp_G=(int*)malloc(sizeof(int)*w*h);
-	int *DownUp_B=(int*)malloc(sizeof(int)*w*h);
-
-	int *H_R=(int*)malloc(sizeof(int)*w*h);
-	int *H_G=(int*)malloc(sizeof(int)*w*h);
-	int *H_B=(int*)malloc(sizeof(int)*w*h);
-	
-	int *aft_R=(int*)malloc(sizeof(int)*ww*hh);
-	int *aft_G=(int*)malloc(sizeof(int)*ww*hh);
-	int *aft_B=(int*)malloc(sizeof(int)*ww*hh);
-	
-	int *ans_R=(int*)malloc(sizeof(int)*ww*hh);
-	int *ans_G=(int*)malloc(sizeof(int)*ww*hh);
-	int *ans_B=(int*)malloc(sizeof(int)*ww*hh);
+	unsigned char *ans_R=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
+	unsigned char *ans_G=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
+	unsigned char *ans_B=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
 
 	//int *test;
 	uchar4* tex;
@@ -171,12 +151,33 @@ void renderScene(void){
 		aft_R store 1.5x upsample image
 		DownUp_R store down sample then upsample image
 	*******************************************************/
-	
+	int m1, n1;
 	for(int j=0; j<h; ++j){
 		for(int i=0; i<w; ++i){
-			H_R[j*w +i]=ori_R[j*w +i]-DownUp_R[j*w +i];
-			H_G[j*w +i]=ori_G[j*w +i]-DownUp_G[j*w +i];
-			H_B[j*w +i]=ori_B[j*w +i]-DownUp_B[j*w +i];
+			m1=(int)ori_R[j*w +i];
+			n1=(int)DownUp_R[j*w +i];
+			m1-=n1;
+			if(m1>255) m1=255;
+			else if(m1<0) m1=0;
+			H_R[j*w +i]=(unsigned char)m1;
+
+			m1=(int)ori_G[j*w +i];
+			n1=(int)DownUp_G[j*w +i];
+			m1-=n1;
+			if(m1>255) m1=255;
+			else if(m1<0) m1=0;
+			H_G[j*w +i]=(unsigned char)m1;
+
+			m1=(int)ori_B[j*w +i];
+			n1=(int)DownUp_B[j*w +i];
+			m1-=n1;
+			if(m1>255) m1=255;
+			else if(m1<0) m1=0;
+			H_B[j*w +i]=(unsigned char)m1;
+			/*
+			H_R[j*w +i]=(unsigned char)((int)ori_R[j*w +i]-(int)DownUp_R[j*w +i]);
+			H_G[j*w +i]=(unsigned char)((int)ori_G[j*w +i]-(int)DownUp_G[j*w +i]);
+			H_B[j*w +i]=(unsigned char)((int)ori_B[j*w +i]-(int)DownUp_B[j*w +i]);*/
 		}
 	}
 	

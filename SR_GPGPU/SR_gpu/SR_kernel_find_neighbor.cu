@@ -1,27 +1,27 @@
 
-texture<int, 2, cudaReadModeElementType> TIR; // ww*hh
-texture<int, 2, cudaReadModeElementType> TIG;
-texture<int, 2, cudaReadModeElementType> TIB;
+texture<unsigned char, 2, cudaReadModeElementType> TIR; // ww*hh
+texture<unsigned char, 2, cudaReadModeElementType> TIG;
+texture<unsigned char, 2, cudaReadModeElementType> TIB;
 
-texture<int, 2, cudaReadModeElementType> TLR; // w*h
-texture<int, 2, cudaReadModeElementType> TLG;
-texture<int, 2, cudaReadModeElementType> TLB;
+texture<unsigned char, 2, cudaReadModeElementType> TLR; // w*h
+texture<unsigned char, 2, cudaReadModeElementType> TLG;
+texture<unsigned char, 2, cudaReadModeElementType> TLB;
 
-texture<int, 2, cudaReadModeElementType> THR; // w*h
-texture<int, 2, cudaReadModeElementType> THG;
-texture<int, 2, cudaReadModeElementType> THB;
+texture<unsigned char, 2, cudaReadModeElementType> THR; // w*h
+texture<unsigned char, 2, cudaReadModeElementType> THG;
+texture<unsigned char, 2, cudaReadModeElementType> THB;
 
 #include <stdio.h>
 #include <time.h>
 
 __device__ int calc_dist(
 		int x, int y, int low_x, int low_y, int w, int ww, int min, int *pos,
-		texture<int, 2, cudaReadModeElementType> TI, texture<int, 2, cudaReadModeElementType> TL){
+		texture<unsigned char, 2, cudaReadModeElementType> TI, texture<unsigned char, 2, cudaReadModeElementType> TL){
 	int dist=0;
 	int dtex;
 	for(int j=0; j<3; ++j){
 		for(int i=0; i<3; ++i){
-			dtex=tex2D(TI, x+i, y+j)-tex2D(TL, low_x+i, low_y+j);
+			dtex=(int)tex2D(TI, x+i, y+j)-(int)tex2D(TL, low_x+i, low_y+j);
 			dist+=dtex*dtex;
 		}
 	}
@@ -34,7 +34,9 @@ __device__ int calc_dist(
 	else return min;
 }
 
-__global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, int w, int h, int ww, int hh, uchar4 *final_ans_ptr){
+__global__ void find_neighbor(
+	int round,
+	int w, int h, int ww, int hh, uchar4 *final_ans_ptr){
 	char* final_ans = (char*)final_ans_ptr;
 	int tid=blockDim.x * blockIdx.x + threadIdx.x;
 	//int tidy=blockDim.y * blockIdx.y + threadIdx.y;
@@ -45,11 +47,11 @@ __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, 
 		int low_x=x*2/3;
 		int low_y=y*2/3;
 		int min_R=585526; // 255*255*9=585525
-		int min_G=585526;
-		int min_B=585526;
+		//int min_G=585526;
+		//int min_B=585526;
 		int min_pos_R[2];
-		int min_pos_G[2];
-		int min_pos_B[2];
+		//int min_pos_G[2];
+		//int min_pos_B[2];
 		
 		for(int j=-1; j<=1; ++j){ // find neighbor in 3*3 block
 			for(int i=-1; i<=1; ++i){
@@ -61,8 +63,30 @@ __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, 
 			}
 		}
 		
+		int mmm, nnn;
 		for(int j=0; j<3; ++j){
 			for(int i=0; i<3; ++i){
+				mmm=(int)tex2D(THR, min_pos_R[0]+i, min_pos_R[1]+j);
+				nnn=(int)tex2D(TIR, x+i, y+j);
+				mmm+=nnn;
+				if(mmm>255) mmm=255;
+				else if(mmm<0) mmm=0;
+				final_ans[((y+j)*ww +x+i)*4]=(unsigned char)mmm;
+
+				mmm=(int)tex2D(THG, min_pos_R[0]+i, min_pos_R[1]+j);
+				nnn=(int)tex2D(TIG, x+i, y+j);
+				mmm+=nnn;
+				if(mmm>255) mmm=255;
+				else if(mmm<0) mmm=0;
+				final_ans[((y+j)*ww +x+i)*4 +1]=(unsigned char)mmm;
+
+				mmm=(int)tex2D(THB, min_pos_R[0]+i, min_pos_R[1]+j);
+				nnn=(int)tex2D(TIB, x+i, y+j);
+				mmm+=nnn;
+				if(mmm>255) mmm=255;
+				else if(mmm<0) mmm=0;
+				final_ans[((y+j)*ww +x+i)*4 +2]=(unsigned char)mmm;
+				/*
 				dans_R[(y+j)*ww +x+i]=tex2D(THR, min_pos_R[0]+i, min_pos_R[1]+j)+tex2D(TIR, x+i, y+j);
 				dans_G[(y+j)*ww +x+i]=tex2D(THG, min_pos_R[0]+i, min_pos_R[1]+j)+tex2D(TIG, x+i, y+j);
 				dans_B[(y+j)*ww +x+i]=tex2D(THB, min_pos_R[0]+i, min_pos_R[1]+j)+tex2D(TIB, x+i, y+j);
@@ -77,7 +101,9 @@ __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, 
 				final_ans[((y+j)*ww +x+i)*4 +0]=(unsigned char)dans_R[(y+j)*ww +x+i];
 				final_ans[((y+j)*ww +x+i)*4 +1]=(unsigned char)dans_G[(y+j)*ww +x+i];
 				final_ans[((y+j)*ww +x+i)*4 +2]=(unsigned char)dans_B[(y+j)*ww +x+i];
+				*/
 				final_ans[((y+j)*ww +x+i)*4 +3]=(unsigned char)255;
+				
 			}
 		}
 	}
@@ -86,25 +112,32 @@ __global__ void find_neighbor(int round, int *dans_R, int *dans_G, int *dans_B, 
 }
 
 void SR_kernel_find_neighbor(
-	int *I_R, int *I_G, int *I_B,
-	int *L_R, int *L_G, int *L_B,
-	int *H_R, int *H_G, int *H_B,
-	int *ans_R, int *ans_G, int *ans_B,
+	unsigned char *I_R, unsigned char *I_G, unsigned char *I_B,
+	unsigned char *L_R, unsigned char *L_G, unsigned char *L_B,
+	unsigned char *H_R, unsigned char *H_G, unsigned char *H_B,
+	unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B,
 	int w, int h, int ww, int hh, uchar4* tex){
 	
 	//int *d_IR, *d_IG, *d_IB; // img(up)
 	//int *d_LR, *d_LG, *d_LB; // img(up(down))
 	//int *d_HR, *d_HG, *d_HB; // img(original) - img(up(down))
-	int *d_ansR, *d_ansG, *d_ansB;
-	cudaMalloc((void**)&d_ansR, ww*hh*sizeof(int));
-	cudaMalloc((void**)&d_ansG, ww*hh*sizeof(int));
-	cudaMalloc((void**)&d_ansB, ww*hh*sizeof(int));
+	//unsigned char *d_ansR, *d_ansG, *d_ansB;
+	//cudaMalloc((void**)&d_ansR, ww*hh*sizeof(unsigned char));
+	//cudaMalloc((void**)&d_ansG, ww*hh*sizeof(unsigned char));
+	//cudaMalloc((void**)&d_ansB, ww*hh*sizeof(unsigned char));
 	//cudaMalloc((void**)&final_ans, ww*hh*4*sizeof(char));
-
-	cudaChannelFormatDesc Desc=cudaCreateChannelDesc<int>();
-
+	cudaChannelFormatDesc Desc=cudaCreateChannelDesc<unsigned char>();
 	cudaArray *d_IR, *d_IG, *d_IB, *d_LR, *d_LG, *d_LB, *d_HR, *d_HG, *d_HB;
-
+	/*
+	cudaChannelFormatDesc Desc2=cudaCreateChannelDesc<unsigned char>();
+	cudaChannelFormatDesc Desc3=cudaCreateChannelDesc<unsigned char>();
+	cudaChannelFormatDesc Desc4=cudaCreateChannelDesc<unsigned char>();
+	cudaChannelFormatDesc Desc5=cudaCreateChannelDesc<unsigned char>();
+	cudaChannelFormatDesc Desc6=cudaCreateChannelDesc<unsigned char>();
+	cudaChannelFormatDesc Desc7=cudaCreateChannelDesc<unsigned char>();
+	cudaChannelFormatDesc Desc8=cudaCreateChannelDesc<unsigned char>();
+	cudaChannelFormatDesc Desc9=cudaCreateChannelDesc<unsigned char>();
+	*/
 	cudaMallocArray(&d_IR, &Desc, ww, hh);
 	cudaMallocArray(&d_IG, &Desc, ww, hh);
 	cudaMallocArray(&d_IB, &Desc, ww, hh);
@@ -115,15 +148,15 @@ void SR_kernel_find_neighbor(
 	cudaMallocArray(&d_HG, &Desc, w, h);
 	cudaMallocArray(&d_HB, &Desc, w, h);
 	
-	cudaMemcpyToArray(d_IR, 0, 0, I_R, ww*hh*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_IG, 0, 0, I_G, ww*hh*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_IB, 0, 0, I_B, ww*hh*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_LR, 0, 0, L_R, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_LG, 0, 0, L_G, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_LB, 0, 0, L_B, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_HR, 0, 0, H_R, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_HG, 0, 0, H_G, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpyToArray(d_HB, 0, 0, H_B, w*h*sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_IR, 0, 0, I_R, ww*hh*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_IG, 0, 0, I_G, ww*hh*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_IB, 0, 0, I_B, ww*hh*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_LR, 0, 0, L_R, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_LG, 0, 0, L_G, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_LB, 0, 0, L_B, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_HR, 0, 0, H_R, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_HG, 0, 0, H_G, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpyToArray(d_HB, 0, 0, H_B, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
 
 	cudaBindTextureToArray(TIR, d_IR);
 	cudaBindTextureToArray(TIG, d_IG);
@@ -139,7 +172,7 @@ void SR_kernel_find_neighbor(
 	int blocks=64;
 	//for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
 	for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
-		find_neighbor<<<blocks, threads>>>(i*threads*blocks, d_ansR, d_ansG, d_ansB, w, h, ww, hh, tex);
+		find_neighbor<<<blocks, threads>>>(i*threads*blocks, w, h, ww, hh, tex);
 		
 		//printf("error1: %s\n", cudaGetErrorString(cudaPeekAtLastError()));
 		//printf("error2: %s\n", cudaGetErrorString(cudaThreadSynchronize()));
@@ -170,7 +203,4 @@ void SR_kernel_find_neighbor(
 	cudaFreeArray(d_HR);
 	cudaFreeArray(d_HG);
 	cudaFreeArray(d_HB);
-	cudaFree(d_ansR);
-	cudaFree(d_ansG);
-	cudaFree(d_ansB);
 }

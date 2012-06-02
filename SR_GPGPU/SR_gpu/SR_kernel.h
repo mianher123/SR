@@ -1,11 +1,13 @@
 
 
-void SR_kernel_up(int *, int *, int *, int *, int *, int *, int, int, int, int);
-void SR_kernel_down(int *, int *, int *, int *, int *, int *, int, int);
-void SR_kernel_find_neighbor(int *,int *, int *, int *, int *, int *, int *, int *, int *, int *, int *, int *, int , int, int, int, uchar4*);
+void SR_kernel_up(unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, int, int, int, int);
+void SR_kernel_down(unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, int, int);
+void SR_kernel_find_neighbor(unsigned char *,unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, int , int, int, int, uchar4*);
 void SR_kernel_start(int, int, int, int);
 void SR_kernel_end();
-void down(int *ori_R, int *ori_G, int *ori_B,
-	int *ans_R, int *ans_G, int *ans_B,
+/*
+void down(unsigned char *ori_R, unsigned char *ori_G, unsigned char *ori_B,
+	unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B,
 	int w, int h);
-void up(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, int *aft_B, int w, int h, int ww, int hh);
+void up(unsigned char *ori_R, unsigned char *ori_G, unsigned char *ori_B, unsigned char *aft_R, unsigned char *aft_G, unsigned char *aft_B, int w, int h, int ww, int hh);
+*/

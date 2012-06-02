@@ -1,7 +1,7 @@
 
-texture<int, 1, cudaReadModeElementType> TR;
-texture<int, 1, cudaReadModeElementType> TG;
-texture<int, 1, cudaReadModeElementType> TB;
+texture<unsigned char, 1, cudaReadModeElementType> TR;
+texture<unsigned char, 1, cudaReadModeElementType> TG;
+texture<unsigned char, 1, cudaReadModeElementType> TB;
 /*
 texture<float, 1, cudaReadModeElementType> Td0;
 texture<float, 1, cudaReadModeElementType> Td1;
@@ -12,72 +12,84 @@ __constant__ float d_d1[3];
 //extern __shared__ int row[];
 
 extern "C" void set_filter(float *d0, float *d1){
-	cudaMemcpyToSymbol(d_d0, d0, 3 * sizeof(float));
-	cudaMemcpyToSymbol(d_d1, d1, 3 * sizeof(float));
+	cudaMemcpyToSymbol(d_d0, d0, 3*sizeof(float));
+	cudaMemcpyToSymbol(d_d1, d1, 3*sizeof(float));
 }
 
-__device__ void setup_col(int *row0, int *row1, int ww, int h, int index, int *ans){
-	row0[0]=(int)(d_d0[1]*ans[index]+d_d0[2]*ans[ww +index]);
-	row1[0]=(int)(d_d1[1]*ans[index]+d_d1[2]*ans[ww +index]);
-	row0[h-1]=(int)(d_d0[0]*ans[(h-2)*ww +index]+d_d0[1]*ans[(h-1)*ww +index]);
-	row1[h-1]=(int)(d_d1[0]*ans[(h-2)*ww +index]+d_d1[1]*ans[(h-1)*ww +index]);
+__device__ void setup_col(unsigned char *row0, unsigned char *row1, int ww, int h, int index, unsigned char *ans){
+	int temp;
+
+	temp=(int)(d_d0[1]*((int)ans[index])+d_d0[2]*((int)ans[ww +index]));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row0[0]=(unsigned char)temp;
+
+	temp=(int)(d_d1[1]*((int)ans[index])+d_d1[2]*((int)ans[ww +index]));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row1[0]=(unsigned char)temp;
+
+	temp=(int)(d_d0[0]*((int)ans[(h-2)*ww +index])+d_d0[1]*((int)ans[(h-1)*ww +index]));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row0[h-1]=(unsigned char)temp;
+
+	temp=(int)(d_d1[0]*((int)ans[(h-2)*ww +index])+d_d1[1]*((int)ans[(h-1)*ww +index]));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row1[h-1]=(unsigned char)temp;
 
 	#pragma unroll
 	for(int i=1; i<h-1; ++i){
-		row0[i]=(int)(d_d0[0]*ans[(i-1)*ww +index]
-					 +d_d0[1]*ans[i*ww +index]
-					 +d_d0[2]*ans[(i+1)*ww +index]);
-		row1[i]=(int)(d_d1[0]*ans[(i-1)*ww +index]
-					 +d_d1[1]*ans[i*ww +index]
-					 +d_d1[2]*ans[(i+1)*ww +index]);		
+		temp=(int)(d_d0[0]*((int)ans[(i-1)*ww +index])+d_d0[1]*((int)ans[i*ww +index])+d_d0[2]*((int)ans[(i+1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[i]=(unsigned char)temp;
+
+		temp=(int)(d_d1[0]*((int)ans[(i-1)*ww +index])+d_d1[1]*((int)ans[i*ww +index])+d_d1[2]*((int)ans[(i+1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[i]=(unsigned char)temp;
 	}
 }
 
-__device__ void setup_row(int *row0, int *row1, int w, int index, texture<int, 1, cudaReadModeElementType> rgb){
-	/*
-	if(tid==0){
-		row[0]=(int)(d_d0[1]*tex1Dfetch(rgb, index*w +0)
-					+d_d0[2]*tex1Dfetch(rgb, index*w +1));
-		row[w]=(int)(d_d1[1]*tex1Dfetch(rgb, index*w +0)
-					+d_d1[2]*tex1Dfetch(rgb, index*w +1));
-	}
-	else if(tid==w-1){
-		row[w-1]=(int)(d_d0[0]*tex1Dfetch(rgb, index*w +w-2)
-					+d_d0[1]*tex1Dfetch(rgb, index*w +w-1));
-		row[w+w-1]=(int)(d_d1[0]*tex1Dfetch(rgb, index*w +w-2)
-					+d_d1[1]*tex1Dfetch(rgb, index*w +w-1));
-	}
-	else{
-		row[tid]=(int)(d_d0[0]*tex1Dfetch(rgb, index*w +tid-1)
-						 +d_d0[1]*tex1Dfetch(rgb, index*w +tid)
-						 +d_d0[2]*tex1Dfetch(rgb, index*w +tid+1));
-		row[w+tid]=(int)(d_d1[0]*tex1Dfetch(rgb, index*w +tid-1)
-						 +d_d1[1]*tex1Dfetch(rgb, index*w +tid)
-						 +d_d1[2]*tex1Dfetch(rgb, index*w +tid+1));
-	}*/
-	
-	row0[0]=(int)(d_d0[1]*tex1Dfetch(rgb, index*w +0)
-					+d_d0[2]*tex1Dfetch(rgb, index*w +1));
-	row1[0]=(int)(d_d1[1]*tex1Dfetch(rgb, index*w +0)
-					+d_d1[2]*tex1Dfetch(rgb, index*w +1));
-	row0[w-1]=(int)(d_d0[0]*tex1Dfetch(rgb, index*w +w-2)
-					+d_d0[1]*tex1Dfetch(rgb, index*w +w-1));
-	row1[w-1]=(int)(d_d1[0]*tex1Dfetch(rgb, index*w +w-2)
-					+d_d1[1]*tex1Dfetch(rgb, index*w +w-1));
+__device__ void setup_row(unsigned char *row0, unsigned char *row1, int w, int index, texture<unsigned char, 1, cudaReadModeElementType> rgb){
+	int temp;
+	temp=(int)(d_d0[1]*(int)tex1Dfetch(rgb, index*w +0)+d_d0[2]*(int)tex1Dfetch(rgb, index*w +1));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row0[0]=(unsigned char)temp;
+
+	temp=(int)(d_d1[1]*(int)tex1Dfetch(rgb, index*w +0)+d_d1[2]*(int)tex1Dfetch(rgb, index*w +1));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row1[0]=(unsigned char)temp;
+
+	temp=(int)(d_d0[0]*(int)tex1Dfetch(rgb, index*w +w-2)+d_d0[1]*(int)tex1Dfetch(rgb, index*w +w-1));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row0[w-1]=(unsigned char)temp;
+
+	temp=(int)(d_d1[0]*(int)tex1Dfetch(rgb, index*w +w-2)+d_d1[1]*(int)tex1Dfetch(rgb, index*w +w-1));
+	if(temp>255) temp=255;
+	else if(temp<0) temp=0;
+	row1[w-1]=(unsigned char)temp;
 
 	#pragma unroll
 	for(int i=1; i<w-1; ++i){
-		row0[i]=(int)(d_d0[0]*tex1Dfetch(rgb, index*w +i-1)
-						 +d_d0[1]*tex1Dfetch(rgb, index*w +i)
-						 +d_d0[2]*tex1Dfetch(rgb, index*w +i+1));
-		row1[i]=(int)(d_d1[0]*tex1Dfetch(rgb, index*w +i-1)
-						 +d_d1[1]*tex1Dfetch(rgb, index*w +i)
-						 +d_d1[2]*tex1Dfetch(rgb, index*w +i+1));		
+		temp=(int)(d_d0[0]*(int)tex1Dfetch(rgb, index*w +i-1)+d_d0[1]*(int)tex1Dfetch(rgb, index*w +i)+d_d0[2]*(int)tex1Dfetch(rgb, index*w +i+1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[i]=(unsigned char)temp;
+
+		temp=(int)(d_d1[0]*(int)tex1Dfetch(rgb, index*w +i-1)+d_d1[1]*(int)tex1Dfetch(rgb, index*w +i)+d_d1[2]*(int)tex1Dfetch(rgb, index*w +i+1));	
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[i]=(unsigned char)temp;
 	}
-	
 }
 
-__global__ void run_col(int round, int *ans_R, int *ans_G, int *ans_B, int w, int h, int ww, int hh){
+__global__ void run_col(int round, unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B, int w, int h, int ww, int hh){
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if(round+tid<ww){
 		int R_ori=0, G_ori=0, B_ori=0; // store weight of original img
@@ -85,15 +97,50 @@ __global__ void run_col(int round, int *ans_R, int *ans_G, int *ans_B, int w, in
 		float R_rate, G_rate, B_rate;
 		int index=round+tid;
 		for(int i=0; i<h; ++i){ // compute weight
-			R_ori+=ans_R[i*ww +index];
-			G_ori+=ans_G[i*ww +index];
-			B_ori+=ans_B[i*ww +index];
+			R_ori+=(int)ans_R[i*ww +index];
+			G_ori+=(int)ans_G[i*ww +index];
+			B_ori+=(int)ans_B[i*ww +index];
 		}
 
-		int row0[720];
-		int row1[720];
-		// red
-		setup_col(row0, row1, ww, h, index, ans_R);
+		unsigned char row0[720];
+		unsigned char row1[720];
+		/////////////////////////////// red ////////////////////////////////////
+		//setup_col(row0, row1, ww, h, index, ans_R);
+		int temp;
+		temp=(int)(d_d0[1]*((int)ans_R[index])+d_d0[2]*((int)ans_R[ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[0]=(unsigned char)temp;
+
+		temp=(int)(d_d1[1]*((int)ans_R[index])+d_d1[2]*((int)ans_R[ww +index]));	
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[0]=(unsigned char)temp;
+
+		temp=(int)(d_d0[0]*((int)ans_R[(h-2)*ww +index])+d_d0[1]*((int)ans_R[(h-1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[h-1]=(unsigned char)temp;
+
+		temp=(int)(d_d1[0]*((int)ans_R[(h-2)*ww +index])+d_d1[1]*((int)ans_R[(h-1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[h-1]=(unsigned char)temp;
+
+		#pragma unroll
+		for(int i=1; i<h-1; ++i){
+			temp=(int)(d_d0[0]*((int)ans_R[(i-1)*ww +index])+d_d0[1]*((int)ans_R[i*ww +index])+d_d0[2]*((int)ans_R[(i+1)*ww +index]));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row0[i]=(unsigned char)temp;
+	
+			temp=(int)(d_d1[0]*((int)ans_R[(i-1)*ww +index])+d_d1[1]*((int)ans_R[i*ww +index])+d_d1[2]*((int)ans_R[(i+1)*ww +index]));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row1[i]=(unsigned char)temp;
+		}
+		// setup_col() finish
+
 		e_aft=0;
 		for(int i=0; i<hh; ++i){
 			if(i%2==0) ans_R[i*ww +index]=row0[3*i/2];
@@ -101,13 +148,57 @@ __global__ void run_col(int round, int *ans_R, int *ans_G, int *ans_B, int w, in
 			e_aft+=ans_R[i*ww +index];
 		}
 		R_rate=(float)e_aft/((float)R_ori*2.0/3.0);
-		for(int i=0; i<hh; ++i){
-			ans_R[i*ww +index]=(int)((float)ans_R[i*ww +index]/R_rate);
-			//if(ans_R[i*ww +index]>255) ans_R[i*ww +index]=255;
-			//else if(ans_R[i*ww +index]<0) ans_R[i*ww +index]=0;
+		if(R_rate<1.0){
+			for(int i=0; i<hh; ++i){
+				temp=(int)ans_R[i*ww +index];
+				temp=(int)((float)temp/R_rate);
+				if(temp>255) temp=255;
+				else if(temp<0) temp=0;
+				ans_R[i*ww +index]=(unsigned char)temp;
+			}
 		}
-		// green
-		setup_col(row0, row1, ww, h, index, ans_G);
+		else{
+			for(int i=0; i<hh; ++i){
+				temp=(int)ans_R[i*ww +index];
+				temp=(int)((float)temp/R_rate);
+				ans_R[i*ww +index]=(unsigned char)temp;
+			}
+		}
+		////////////////////////// green ///////////////////////////
+		//setup_col(row0, row1, ww, h, index, ans_G);
+		temp=(int)(d_d0[1]*((int)ans_G[index])+d_d0[2]*((int)ans_G[ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[0]=(unsigned char)temp;
+
+		temp=(int)(d_d1[1]*((int)ans_G[index])+d_d1[2]*((int)ans_G[ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[0]=(unsigned char)temp;
+
+		temp=(int)(d_d0[0]*((int)ans_G[(h-2)*ww +index])+d_d0[1]*((int)ans_G[(h-1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[h-1]=(unsigned char)temp;
+	
+		temp=(int)(d_d1[0]*((int)ans_G[(h-2)*ww +index])+d_d1[1]*((int)ans_G[(h-1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[h-1]=(unsigned char)temp;
+
+		#pragma unroll
+		for(int i=1; i<h-1; ++i){
+			temp=(int)(d_d0[0]*((int)ans_G[(i-1)*ww +index])+d_d0[1]*((int)ans_G[i*ww +index])+d_d0[2]*((int)ans_G[(i+1)*ww +index]));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row0[i]=(unsigned char)temp;
+
+			temp=(int)(d_d1[0]*((int)ans_G[(i-1)*ww +index])+d_d1[1]*((int)ans_G[i*ww +index])+d_d1[2]*((int)ans_G[(i+1)*ww +index]));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row1[i]=(unsigned char)temp;
+		}
+		// setup_col() finish
 		e_aft=0;
 		for(int i=0; i<hh; ++i){
 			if(i%2==0) ans_G[i*ww +index]=row0[3*i/2];
@@ -115,13 +206,58 @@ __global__ void run_col(int round, int *ans_R, int *ans_G, int *ans_B, int w, in
 			e_aft+=ans_G[i*ww +index];
 		}
 		G_rate=(float)e_aft/((float)G_ori*2.0/3.0);
-		for(int i=0; i<hh; ++i){
-			ans_G[i*ww +index]=(int)((float)ans_G[i*ww +index]/G_rate);
-			//if(ans_G[i*ww +index]>255) ans_G[i*ww +index]=255;
-			//else if(ans_G[i*ww +index]<0) ans_G[i*ww +index]=0;
+		if(G_rate<1.0){
+			for(int i=0; i<hh; ++i){
+				temp=(int)ans_G[i*ww +index];
+				temp=(int)((float)temp/G_rate);
+				if(temp>255) temp=255;
+				else if(temp<0) temp=0;
+				ans_G[i*ww +index]=(unsigned char)temp;
+			}
 		}
-		// blue
-		setup_col(row0, row1, ww, h, index, ans_B);
+		else{
+			for(int i=0; i<hh; ++i){
+				temp=(int)ans_G[i*ww +index];
+				temp=(int)((float)temp/G_rate);
+				ans_G[i*ww +index]=(unsigned char)temp;
+			}
+		}
+		///////////////////////////////// blue /////////////////////////////////
+		//setup_col(row0, row1, ww, h, index, ans_B);
+		temp=(int)(d_d0[1]*((int)ans_B[index])+d_d0[2]*((int)ans_B[ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[0]=(unsigned char)temp;
+
+		temp=(int)(d_d1[1]*((int)ans_B[index])+d_d1[2]*((int)ans_B[ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[0]=(unsigned char)temp;
+
+		temp=(int)(d_d0[0]*((int)ans_B[(h-2)*ww +index])+d_d0[1]*((int)ans_B[(h-1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[h-1]=(unsigned char)temp;
+
+		temp=(int)(d_d1[0]*((int)ans_B[(h-2)*ww +index])+d_d1[1]*((int)ans_B[(h-1)*ww +index]));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[h-1]=(unsigned char)temp;
+
+		#pragma unroll
+		for(int i=1; i<h-1; ++i){
+			temp=(int)(d_d0[0]*((int)ans_B[(i-1)*ww +index])+d_d0[1]*((int)ans_B[i*ww +index])+d_d0[2]*((int)ans_B[(i+1)*ww +index]));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row0[i]=(unsigned char)temp;
+			
+			temp=(int)(d_d1[0]*((int)ans_B[(i-1)*ww +index])+d_d1[1]*((int)ans_B[i*ww +index])+d_d1[2]*((int)ans_B[(i+1)*ww +index]));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row1[i]=(unsigned char)temp;
+		}
+		// setup_col() finish
+
 		e_aft=0;
 		for(int i=0; i<hh; ++i){
 			if(i%2==0) ans_B[i*ww +index]=row0[3*i/2];
@@ -129,15 +265,26 @@ __global__ void run_col(int round, int *ans_R, int *ans_G, int *ans_B, int w, in
 			e_aft+=ans_B[i*ww +index];
 		}
 		B_rate=(float)e_aft/((float)B_ori*2.0/3.0);
-		for(int i=0; i<hh; ++i){
-			ans_B[i*ww +index]=(int)((float)ans_B[i*ww +index]/B_rate);
-			//if(ans_B[i*ww +index]>255) ans_B[i*ww +index]=255;
-			//else if(ans_B[i*ww +index]<0) ans_B[i*ww +index]=0;
+		if(B_rate<1.0){
+			for(int i=0; i<hh; ++i){
+				temp=(int)ans_B[i*ww +index];
+				temp=(int)((float)temp/B_rate);
+				if(temp>255) temp=255;
+				else if(temp<0) temp=0;
+				ans_B[i*ww +index]=(unsigned char)temp;
+			}
+		}
+		else{
+			for(int i=0; i<hh; ++i){
+				temp=(int)ans_B[i*ww +index];
+				temp=(int)((float)temp/B_rate);
+				ans_B[i*ww +index]=(unsigned char)temp;
+			}
 		}
 	}
 }
 
-__global__ void run_row(int round, int *ans_R, int *ans_G, int *ans_B, int w, int h, int ww, int hh){
+__global__ void run_row(int round, unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B, int w, int h, int ww, int hh){
 	//int bid = blockIdx.x;
 	//int tid = threadIdx.x;
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -150,116 +297,226 @@ __global__ void run_row(int round, int *ans_R, int *ans_G, int *ans_B, int w, in
 		int index=(round+tid)*w;
 		
 		for(int i=0; i<w; ++i){ // compute weight
-			R_ori+=tex1Dfetch(TR, index +i);
-			G_ori+=tex1Dfetch(TG, index +i);
-			B_ori+=tex1Dfetch(TB, index +i);
+			R_ori+=(int)tex1Dfetch(TR, index +i);
+			G_ori+=(int)tex1Dfetch(TG, index +i);
+			B_ori+=(int)tex1Dfetch(TB, index +i);
 		}
 
-		int row0[1280];
-		int row1[1280];
-		// red
-		setup_row(row0, row1, w, round+tid, TR);
+		unsigned char row0[1280];
+		unsigned char row1[1280];
+		index=round+tid;
+		//////////////////////////////// red ////////////////////////////////////
+		//setup_row(row0, row1, w, round+tid, TR);
+		int temp;
+		temp=(int)(d_d0[1]*(int)tex1Dfetch(TR, index*w +0)+d_d0[2]*(int)tex1Dfetch(TR, index*w +1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[0]=(unsigned char)temp;
+
+		temp=(int)(d_d1[1]*(int)tex1Dfetch(TR, index*w +0)+d_d1[2]*(int)tex1Dfetch(TR, index*w +1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[0]=(unsigned char)temp;
+
+		temp=(int)(d_d0[0]*(int)tex1Dfetch(TR, index*w +w-2)+d_d0[1]*(int)tex1Dfetch(TR, index*w +w-1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[w-1]=(unsigned char)temp;
+
+		temp=(int)(d_d1[0]*(int)tex1Dfetch(TR, index*w +w-2)+d_d1[1]*(int)tex1Dfetch(TR, index*w +w-1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[w-1]=(unsigned char)temp;
+
+		#pragma unroll
+		for(int i=1; i<w-1; ++i){
+			temp=(int)(d_d0[0]*(int)tex1Dfetch(TR, index*w +i-1)+d_d0[1]*(int)tex1Dfetch(TR, index*w +i)+d_d0[2]*(int)tex1Dfetch(TR, index*w +i+1));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row0[i]=(unsigned char)temp;
+	
+			temp=(int)(d_d1[0]*(int)tex1Dfetch(TR, index*w +i-1)+d_d1[1]*(int)tex1Dfetch(TR, index*w +i)+d_d1[2]*(int)tex1Dfetch(TR, index*w +i+1));	
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row1[i]=(unsigned char)temp;
+		}
+		// setup_row() finish
+
+
+		e_aft=0;
+		index=(round+tid)*ww;
+		for(int i=0; i<ww; ++i){
+			if(i%2==0) ans_R[index +i]=row0[3*i/2];
+			else ans_R[index +i]=row1[3*(i-1)/2 +2];
+			e_aft+=(int)ans_R[index +i];
+		}
+		R_rate=(float)e_aft/((float)R_ori*2.0/3.0);
+		if(R_rate<1.0){
+			for(int i=0; i<ww; ++i){
+				temp=(int)ans_R[index +i];
+				temp=(int)((float)temp/R_rate);
+				if(temp>255) temp=255;
+				else if(temp<0) temp=0;
+				ans_R[index +i]=(unsigned char)temp;
+			}
+		}
+		else{
+			for(int i=0; i<ww; ++i){
+				temp=(int)ans_R[index +i];
+				temp=(int)((float)temp/R_rate);
+				ans_R[index +i]=(unsigned char)temp;
+			}
+		}
+		////////////////////// green //////////////////////////////
+		//setup_row(row0, row1, w, round+tid, TG);
+		index=round+tid;
+		temp=(int)(d_d0[1]*(int)tex1Dfetch(TG, index*w +0)+d_d0[2]*(int)tex1Dfetch(TG, index*w +1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[0]=(unsigned char)temp;
+
+		temp=(int)(d_d1[1]*(int)tex1Dfetch(TG, index*w +0)+d_d1[2]*(int)tex1Dfetch(TR, index*w +1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[0]=(unsigned char)temp;
+
+		temp=(int)(d_d0[0]*(int)tex1Dfetch(TG, index*w +w-2)+d_d0[1]*(int)tex1Dfetch(TG, index*w +w-1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[w-1]=(unsigned char)temp;
+
+		temp=(int)(d_d1[0]*(int)tex1Dfetch(TG, index*w +w-2)+d_d1[1]*(int)tex1Dfetch(TG, index*w +w-1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[w-1]=(unsigned char)temp;
+
+		#pragma unroll
+		for(int i=1; i<w-1; ++i){
+			temp=(int)(d_d0[0]*(int)tex1Dfetch(TG, index*w +i-1)+d_d0[1]*(int)tex1Dfetch(TG, index*w +i)+d_d0[2]*(int)tex1Dfetch(TG, index*w +i+1));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row0[i]=(unsigned char)temp;
+				
+			temp=(int)(d_d1[0]*(int)tex1Dfetch(TG, index*w +i-1)+d_d1[1]*(int)tex1Dfetch(TG, index*w +i)+d_d1[2]*(int)tex1Dfetch(TG, index*w +i+1));	
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row1[i]=(unsigned char)temp;
+		}
+		// setup_row() finish
+
 		e_aft=0;
 		index=(round+tid)*w*2/3;
 		for(int i=0; i<w*2/3; ++i){
-			if(i%2==0) ans_R[index +i]=row0[3*i/2];
-			else ans_R[index +i]=row1[3*(i-1)/2 +2];
-			e_aft+=ans_R[index +i];
-		}
-		R_rate=(float)e_aft/((float)R_ori*2.0/3.0);
-		for(int i=0; i<w*2/3; ++i){
-			ans_R[index +i]=(int)((float)ans_R[index +i]/R_rate);
-			//if(ans_B[index +i]>255) ans_B[index +i]=255;
-			//else if(ans_B[index +i]<0) ans_B[index +i]=0;
-		}
-		// green
-		/*
-		setup_row(row0, row1, w, round+bid, TG, tid);
-		__syncthreads();
-		index=(round+bid)*w*2/3;
-		if(tid<w*2/3){
-			if(tid%2==0) ans_G[index +tid]=row[3*tid/2];
-			else ans_G[index +tid]=row[w+ 3*(tid-1)/2 +2];
-			__syncthreads();
-			if(tid==0){
-				weight[3]=0;
-				for(int i=0; i<w*2/3; ++i)
-					weight[3]+=ans_G[index+i];
-				rate[1]=(float)weight[3]/((float)weight[1]*2.0/3.0);
-			}
-			__syncthreads();
-			ans_G[index +tid]=(int)((float)ans_G[index +tid]/rate[1]);
-		}
-		__syncthreads();*/
-		
-		setup_row(row0, row1, w, round+tid, TG);
-		e_aft=0;
-		for(int i=0; i<w*2/3; ++i){
 			if(i%2==0) ans_G[index +i]=row0[3*i/2];
 			else ans_G[index +i]=row1[3*(i-1)/2 +2];
-			e_aft+=ans_G[index +i];
+			e_aft+=(int)ans_G[index +i];
 		}
 		G_rate=(float)e_aft/((float)G_ori*2.0/3.0);
-		for(int i=0; i<w*2/3; ++i){
-			ans_G[index +i]=(int)((float)ans_G[index +i]/G_rate);
-		}
-		
-		// blue
-		/*
-		setup_row(row0, row1, w, round+bid, TB, tid);
-		__syncthreads();
-		index=(round+bid)*w*2/3;
-		if(tid<w*2/3){
-			if(tid%2==0) ans_B[index +tid]=row[3*tid/2];
-			else ans_B[index +tid]=row[w+ 3*(tid-1)/2 +2];
-			__syncthreads();
-			if(tid==0){
-				weight[3]=0;
-				for(int i=0; i<w*2/3; ++i)
-					weight[3]+=ans_B[index+i];
-				rate[2]=(float)weight[3]/((float)weight[2]*2.0/3.0);
+		if(G_rate<1.0){
+			for(int i=0; i<ww; ++i){
+				temp=(int)ans_G[index +i];
+				temp=(int)((float)temp/G_rate);
+				if(temp>255) temp=255;
+				else if(temp<0) temp=0;
+				ans_G[index +i]=(unsigned char)temp;
 			}
-			__syncthreads();
-			ans_B[index +tid]=(int)((float)ans_B[index +tid]/rate[2]);
 		}
-		__syncthreads();*/
+		else{
+			for(int i=0; i<ww; ++i){
+				temp=(int)ans_G[index +i];
+				temp=(int)((float)temp/G_rate);
+				ans_G[index +i]=(unsigned char)temp;
+			}
+		}
 		
-		setup_row(row0, row1, w, round+tid, TB);
+		////////////////////////// blue ////////////////////////////
+		
+		//setup_row(row0, row1, w, round+tid, TB);
+		index=round+tid;
+		temp=(int)(d_d0[1]*(int)tex1Dfetch(TB, index*w +0)+d_d0[2]*(int)tex1Dfetch(TB, index*w +1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[0]=(unsigned char)temp;
+
+		temp=(int)(d_d1[1]*(int)tex1Dfetch(TB, index*w +0)+d_d1[2]*(int)tex1Dfetch(TB, index*w +1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[0]=(unsigned char)temp;
+
+		temp=(int)(d_d0[0]*(int)tex1Dfetch(TB, index*w +w-2)+d_d0[1]*(int)tex1Dfetch(TB, index*w +w-1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row0[w-1]=(unsigned char)temp;
+	
+		temp=(int)(d_d1[0]*(int)tex1Dfetch(TB, index*w +w-2)+d_d1[1]*(int)tex1Dfetch(TB, index*w +w-1));
+		if(temp>255) temp=255;
+		else if(temp<0) temp=0;
+		row1[w-1]=(unsigned char)temp;
+	
+		#pragma unroll
+		for(int i=1; i<w-1; ++i){
+			temp=(int)(d_d0[0]*(int)tex1Dfetch(TB, index*w +i-1)+d_d0[1]*(int)tex1Dfetch(TB, index*w +i)+d_d0[2]*(int)tex1Dfetch(TB, index*w +i+1));
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row0[i]=(unsigned char)temp;
+	
+			temp=(int)(d_d1[0]*(int)tex1Dfetch(TB, index*w +i-1)+d_d1[1]*(int)tex1Dfetch(TB, index*w +i)+d_d1[2]*(int)tex1Dfetch(TB, index*w +i+1));	
+			if(temp>255) temp=255;
+			else if(temp<0) temp=0;
+			row1[i]=(unsigned char)temp;
+		}
+		// setup_row() finish
+
 		e_aft=0;
+		index=(round+tid)*w*2/3;
 		for(int i=0; i<w*2/3; ++i){
 			if(i%2==0) ans_B[index +i]=row0[3*i/2];
 			else ans_B[index +i]=row1[3*(i-1)/2 +2];
 			e_aft+=ans_B[index +i];
 		}
 		B_rate=(float)e_aft/((float)B_ori*2.0/3.0);
-		for(int i=0; i<w*2/3; ++i){
-			ans_B[index +i]=(int)((float)ans_B[index +i]/B_rate);
-			//if(ans_B[index +i]>255) ans_B[index +i]=255;
-			//else if(ans_B[index +i]<0) ans_B[index +i]=0;
+		if(B_rate<1.0){
+			for(int i=0; i<ww; ++i){
+				temp=(int)ans_B[index +i];
+				temp=(int)((float)temp/B_rate);
+				if(temp>255) temp=255;
+				else if(temp<0) temp=0;
+				ans_B[index +i]=(unsigned char)temp;
+			}
+		}
+		else{
+			for(int i=0; i<ww; ++i){
+				temp=(int)ans_B[index +i];
+				temp=(int)((float)temp/B_rate);
+				ans_B[index +i]=(unsigned char)temp;
+			}
 		}
 		
 	}
 }
 
-void SR_kernel_down(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, int *aft_B, int w, int h){
+void SR_kernel_down(
+	unsigned char *ori_R, unsigned char *ori_G, unsigned char *ori_B,
+	unsigned char *aft_R, unsigned char *aft_G, unsigned char *aft_B,
+	int w, int h){
 	float d0[3]={-0.022, 0.974, 0.227};
 	float d1[3]={0.227, 0.974, -0.022};
 
-	int *R, *G, *B;
-	int *ans_R, *ans_G, *ans_B;
+	unsigned char *R, *G, *B;
+	unsigned char *ans_R, *ans_G, *ans_B;
 	int ww=w*2/3;
 	int hh=h*2/3;
 
-	cudaMalloc((void**)&R, w*h*sizeof(int));
-	cudaMalloc((void**)&G, w*h*sizeof(int));
-	cudaMalloc((void**)&B, w*h*sizeof(int));
-	cudaMalloc((void**)&ans_R, w*h*sizeof(int)*2/3);
-	cudaMalloc((void**)&ans_G, w*h*sizeof(int)*2/3);
-	cudaMalloc((void**)&ans_B, w*h*sizeof(int)*2/3);
+	cudaMalloc((void**)&R, w*h*sizeof(unsigned char));
+	cudaMalloc((void**)&G, w*h*sizeof(unsigned char));
+	cudaMalloc((void**)&B, w*h*sizeof(unsigned char));
+	cudaMalloc((void**)&ans_R, w*h*sizeof(unsigned char)*2/3);
+	cudaMalloc((void**)&ans_G, w*h*sizeof(unsigned char)*2/3);
+	cudaMalloc((void**)&ans_B, w*h*sizeof(unsigned char)*2/3);
 	
-	cudaMemcpy(R, ori_R, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpy(G, ori_G, w*h*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpy(B, ori_B, w*h*sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(R, ori_R, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpy(G, ori_G, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
+	cudaMemcpy(B, ori_B, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
 
 	cudaBindTexture(0, TR, R);
 	cudaBindTexture(0, TG, G);
@@ -276,9 +533,9 @@ void SR_kernel_down(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, 
 		run_col<<<blocks, threads>>>(i*threads*blocks, ans_R, ans_G, ans_B, w, h, ww, hh);
 	
 
-	cudaMemcpy(aft_R, ans_R, w*h*sizeof(int)*4/9, cudaMemcpyDeviceToHost);
-	cudaMemcpy(aft_G, ans_G, w*h*sizeof(int)*4/9, cudaMemcpyDeviceToHost);
-	cudaMemcpy(aft_B, ans_B, w*h*sizeof(int)*4/9, cudaMemcpyDeviceToHost);
+	cudaMemcpy(aft_R, ans_R, w*h*sizeof(unsigned char)*4/9, cudaMemcpyDeviceToHost);
+	cudaMemcpy(aft_G, ans_G, w*h*sizeof(unsigned char)*4/9, cudaMemcpyDeviceToHost);
+	cudaMemcpy(aft_B, ans_B, w*h*sizeof(unsigned char)*4/9, cudaMemcpyDeviceToHost);
 
 	cudaUnbindTexture(TR);
 	cudaUnbindTexture(TG);
