@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <time.h>
 
-extern int *test;
 texture<int, 1, cudaReadModeElementType> TR;
 texture<int, 1, cudaReadModeElementType> TG;
 texture<int, 1, cudaReadModeElementType> TB;
@@ -42,7 +41,7 @@ __device__ int convolusion_col(int index, int ww, int hh, int *ans, int *row0, i
 	temp[1]=(int)(d_u1[0]*row1[hh-3]+d_u1[1]*row1[hh-2]+d_u1[2]*row1[hh-1]);
 	ans[(hh-1)*ww +index]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
-	#pragma unroll
+	//#pragma unroll
 	for(int i=2; i<hh-2; ++i){
 		temp[0]=(int)(d_u0[0]*row0[i-2]+d_u0[1]*row0[i-1]+d_u0[2]*row0[i]+d_u0[3]*row0[i+1]+d_u0[4]*row0[i+2]);
 		temp[1]=(int)(d_u1[0]*row1[i-2]+d_u1[1]*row1[i-1]+d_u1[2]*row1[i]+d_u1[3]*row1[i+1]+d_u1[4]*row1[i+2]);
@@ -63,8 +62,8 @@ __device__ int convolusion_row(int a_index, int w, int ww, int *ans, int index, 
 	ans[a_index*ww]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==1
-	temp[0]=(int)(d_u0[0]*row0[ww-4]+d_u0[1]*row0[ww-3]+d_u0[2]*row0[ww-2]+d_u0[3]*row0[ww-1]);
-	temp[1]=(int)(d_u1[0]*row1[ww-4]+d_u1[1]*row1[ww-3]+d_u1[2]*row1[ww-2]+d_u1[3]*row1[ww-1]);
+	temp[0]=(int)(d_u0[1]*row0[0]+d_u0[2]*row0[1]+d_u0[3]*row0[2]+d_u0[4]*row0[3]);
+	temp[1]=(int)(d_u1[1]*row1[0]+d_u1[2]*row1[1]+d_u1[3]*row1[2]+d_u1[4]*row1[3]);
 	ans[a_index*ww +1]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	// i==ww-2
@@ -78,7 +77,7 @@ __device__ int convolusion_row(int a_index, int w, int ww, int *ans, int index, 
 	ans[a_index*ww +ww-1]=temp[0]+temp[1];
 	e_aft+=(temp[0]+temp[1]);
 	
-	#pragma unroll
+	//#pragma unroll
 	for(int i=2; i<ww-2; ++i){
 		temp[0]=(int)(d_u0[0]*row0[i-2]+d_u0[1]*row0[i-1]+d_u0[2]*row0[i]+d_u0[3]*row0[i+1]+d_u0[4]*row0[i+2]);
 		temp[1]=(int)(d_u1[0]*row1[i-2]+d_u1[1]*row1[i-1]+d_u1[2]*row1[i]+d_u1[3]*row1[i+1]+d_u1[4]*row1[i+2]);
@@ -95,7 +94,7 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		int e_aft;
 		float R_rate, G_rate, B_rate;
 		int index=(round+tid)*h;
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<h; ++i){ // compute weight
 			R_ori+=tex1Dfetch(TansR, index +i);
 			G_ori+=tex1Dfetch(TansG, index +i);
@@ -109,7 +108,7 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		int row0[1080];
 		int row1[1080];
 		// red
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<hh; ++i){
 			
 			if(i%3==0) row0[i]=tex1Dfetch(TansR, index +i*2/3);
@@ -129,7 +128,7 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		e_aft=convolusion_col(round+tid, ww, hh, ans_R, row0, row1);
 		R_rate=(float)e_aft/(float)(R_ori*3/2);
 		// green
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<hh; ++i){
 			
 			if(i%3==0) row0[i]=tex1Dfetch(TansG, index +i*2/3);
@@ -149,7 +148,7 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		e_aft=convolusion_col(round+tid, ww, hh, ans_G, row0, row1);
 		G_rate=(float)e_aft/(float)(G_ori*3/2);
 		// blue
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<hh; ++i){
 			
 			if(i%3==0) row0[i]=tex1Dfetch(TansB, index +i*2/3);
@@ -170,7 +169,7 @@ __global__ void run_cuda_col(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		B_rate=(float)e_aft/(float)(B_ori*3/2);
 		
 		index=round+tid;
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<hh; ++i){
 			ans_R[i*ww +index]=(int)((float)ans_R[i*ww +index]/R_rate);
 			ans_G[i*ww +index]=(int)((float)ans_G[i*ww +index]/G_rate);
@@ -199,7 +198,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		int e_aft;
 		float R_rate, G_rate, B_rate;
 		int index=(round+tid)*w;
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<w; ++i){ // compute weight
 			R_ori+=tex1Dfetch(TR, index +i);
 			G_ori+=tex1Dfetch(TG, index +i);
@@ -210,7 +209,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		int row1[1920];
 		
 		// red
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<ww; ++i){ // setup row
 			/*
 			if(i%3==0) row[threadIdx.x*ww*2 +i]=tex1Dfetch(TR, index +i*2/3);
@@ -230,7 +229,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		R_rate=(float)e_aft/(float)(R_ori*3/2);
 
 		// green
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<ww; ++i){ // setup row
 			/*
 			if(i%3==0) row[threadIdx.x*ww*2 +i]=tex1Dfetch(TG, index +i*2/3);
@@ -251,7 +250,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		G_rate=(float)e_aft/(float)(G_ori*3/2);
 
 		// blue
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<ww; ++i){ // setup row
 			/*
 			if(i%3==0) row[threadIdx.x*ww*2 +i]=tex1Dfetch(TB, index +i*2/3);
@@ -272,7 +271,7 @@ __global__ void run_cuda_row(int round, int *ans_R, int *ans_G, int *ans_B, int 
 		B_rate=(float)e_aft/(float)(B_ori*3/2);
 		
 		index=(round+tid)*ww;
-		#pragma unroll
+		//#pragma unroll
 		for(int i=0; i<ww; ++i){
 			temp_R[i*h +round+tid]=ans_R[index +i]=(int)((float)ans_R[index +i]/R_rate);
 			temp_G[i*h +round+tid]=ans_G[index +i]=(int)((float)ans_G[index +i]/G_rate);
@@ -302,8 +301,7 @@ void SR_kernel_up(int *ori_R, int *ori_G, int *ori_B, int *aft_R, int *aft_G, in
 	int *d_ans_R, *d_ans_G, *d_ans_B;
 	int *temp_R, *temp_G, *temp_B;
 
-	//int ww=w*3/2;
-	//int hh=h*3/2;
+	//printf("in up, w=%d, h=%d, ww=%d, hh=%d\n", w, h, ww, hh);
 	cudaMalloc((void**)&d_ori_R, w*h*sizeof(int));
 	cudaMalloc((void**)&d_ori_G, w*h*sizeof(int));
 	cudaMalloc((void**)&d_ori_B, w*h*sizeof(int));

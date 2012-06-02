@@ -1,7 +1,7 @@
-int *test;
+//extern int *test;
 
 void SR_kernel_start(int w, int h, int ww, int hh){
-	cudaMalloc((void**)&test, 100*sizeof(int));
+	//cudaMalloc((void**)&test, 100*sizeof(int));
 	/*
 	cudaMalloc((void**)&d_ansR, ww*hh*sizeof(int));
 	cudaMalloc((void**)&d_ansG, ww*hh*sizeof(int));
@@ -14,6 +14,6 @@ void SR_kernel_start(int w, int h, int ww, int hh){
 }
 
 void SR_kernel_end(){
-	cudaFree(test);
+	//cudaFree(test);
 }
 
