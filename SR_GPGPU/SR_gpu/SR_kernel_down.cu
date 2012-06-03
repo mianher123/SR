@@ -92,6 +92,12 @@ __device__ void setup_row(unsigned char *row0, unsigned char *row1, int w, int i
 	}
 }
 
+__device__ unsigned char clamp(int value){
+	if(value > 255) return (unsigned char)255;
+	else if(value < 0) return (unsigned char)0;
+	else return value;
+}
+
 __global__ void run_col(int round, unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B, int w, int h, int ww, int hh){
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if(round+tid<ww){
@@ -437,335 +443,142 @@ __global__ void run_col(int round, unsigned char *ans_R, unsigned char *ans_G, u
 }
 
 __global__ void run_row(
-	int round,
+	int row_base,
 	unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B,
 	int w, int h, int ww, int hh,
 	unsigned char *temp_R, unsigned char *temp_G, unsigned char *temp_B){
-	//int bid = blockIdx.x;
-	//int tid = threadIdx.x;
-	int tid = blockDim.x * blockIdx.x + threadIdx.x;
-	if(round+tid<h){
-		//__shared__ int weight[4]; // R_ori, G_ori, B_ori, e_aft
-		//__shared__ float rate[3]; // R_rate, G_rate, B_rate
-		int R_ori=0, G_ori=0, B_ori=0; // store weight of original img
-		int e_aft;
-		float R_rate, G_rate, B_rate;
-		int index=(round+tid)*w;
+
+	// Calculate processing row number.
+	int row_num = blockDim.x * blockIdx.x + threadIdx.x + row_base;
+
+	if(row_num < h){ 
+
+		// Sum of pixels on this row in the original image.
+		//int R_ori_sum=0, G_ori_sum=0, B_ori_sum=0; 
+		int ori_sum;
+
+		// Sum of pixels on this row after filtering.
+		int aft_sum;
+
+		//float R_ratio, G_ratil, B_ratio;
+		float norm_factor;
+
+		// Index of base for this row.
+		int row_ori_index_base = row_num*w;
+		int row_aft_index_base = row_num*ww;
+
+		// Storage for current column.
+		int ori_index_offset;
+		int aft_index_offset;
+
+		// Register storage for currently processing piece of original image.
+		unsigned char ori_piece[3];
+
+		// Temporary storage for pixel value.
+		unsigned char temp0, temp1;
+
+		// Initialize sum of row.
+		ori_sum = 0;
+		aft_sum = 0;
+		ori_index_offset = 0;
+		aft_index_offset = 0;
+
 		#pragma unroll
-		for(int i=0; i<w; ++i){ // compute weight
-			R_ori+=(int)tex1Dfetch(TR, index +i);
-			G_ori+=(int)tex1Dfetch(TG, index +i);
-			B_ori+=(int)tex1Dfetch(TB, index +i);
+		for(; aft_index_offset <= ww-2; ori_index_offset += 3, aft_index_offset += 2){
+
+			ori_piece[0] = tex1Dfetch(TR, row_ori_index_base + ori_index_offset);
+			ori_piece[1] = tex1Dfetch(TR, row_ori_index_base + ori_index_offset + 1);
+			ori_piece[2] = tex1Dfetch(TR, row_ori_index_base + ori_index_offset + 2);
+			ori_sum += (int)ori_piece[0] + (int)ori_piece[1] + (int)ori_piece[2];
+
+			temp0 = clamp (
+				d_d0[0]*(int)ori_piece[0] +
+				d_d0[1]*(int)ori_piece[1] +
+				d_d0[2]*(int)ori_piece[2] );
+
+			temp1 = clamp(
+				d_d1[0]*(int)ori_piece[0] +
+				d_d1[1]*(int)ori_piece[1] +
+				d_d1[2]*(int)ori_piece[2]);
+
+			ans_R[row_aft_index_base + aft_index_offset] = (unsigned char)temp0;
+			ans_R[row_aft_index_base + aft_index_offset + 1] = (unsigned char)temp1;
+			aft_sum += (int)temp0 + (int)temp1;
 		}
 
-		//unsigned char row0[1280];
-		//unsigned char row1[1280];
-		//////////////////////////////// red ////////////////////////////////////
-		//setup_row(row0, row1, w, round+tid, TR);
-		int temp;
-		int bi;
-		/*
-		temp=(int)(d_d0[1]*(int)tex1Dfetch(TR, index)+d_d0[2]*(int)tex1Dfetch(TR, index +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row0[0]=(unsigned char)temp;
-
-		temp=(int)(d_d1[1]*(int)tex1Dfetch(TR, index)+d_d1[2]*(int)tex1Dfetch(TR, index +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row1[0]=(unsigned char)temp;
-
-		temp=(int)(d_d0[0]*(int)tex1Dfetch(TR, index +w-2)+d_d0[1]*(int)tex1Dfetch(TR, index +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row0[w-1]=(unsigned char)temp;
-
-		temp=(int)(d_d1[0]*(int)tex1Dfetch(TR, index +w-2)+d_d1[1]*(int)tex1Dfetch(TR, index +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row1[w-1]=(unsigned char)temp;
-
-		#pragma unroll
-		for(int i=1; i<w-1; ++i){
-			temp=(int)(d_d0[0]*(int)tex1Dfetch(TR, index +i-1)+d_d0[1]*(int)tex1Dfetch(TR, index +i)+d_d0[2]*(int)tex1Dfetch(TR, index +i+1));
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			row0[i]=(unsigned char)temp;
-	
-			temp=(int)(d_d1[0]*(int)tex1Dfetch(TR, index +i-1)+d_d1[1]*(int)tex1Dfetch(TR, index +i)+d_d1[2]*(int)tex1Dfetch(TR, index +i+1));	
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			row1[i]=(unsigned char)temp;
-		}*/
-		// setup_row() finish
-
-		
-		e_aft=0;
-		index=(round+tid);
-		
-		// i==0
-		temp=(int)(d_d0[1]*(int)tex1Dfetch(TR, index*w)+d_d0[2]*(int)tex1Dfetch(TR, index*w +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		ans_R[index*ww]=(unsigned char)temp;
-		e_aft+=temp;
-		
-		#pragma unroll
-		for(int i=2; i<=ww-2; i+=2){
-			bi=3*i/2;
-			temp=(int)(d_d0[0]*(int)tex1Dfetch(TR, index*w +bi-1)+d_d0[1]*(int)tex1Dfetch(TR, index*w +bi)+d_d0[2]*(int)tex1Dfetch(TR, index*w +bi+1));
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			ans_R[index*ww +i]=(unsigned char)temp;
-			e_aft+=temp;
-		}
-
-		// i==ww-1
-		temp=(int)(d_d1[0]*(int)tex1Dfetch(TR, index*w +w-2)+d_d1[1]*(int)tex1Dfetch(TR, index*w +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		ans_R[index*ww +ww-1]=(unsigned char)temp;
-		e_aft+=temp;
-
-		#pragma unroll
-		for(int i=1; i<=ww-3; i+=2){
-			bi=3*(i-1)/2 +2;
-			temp=(int)(d_d1[0]*(int)tex1Dfetch(TR, index*w +bi-1)+d_d1[1]*(int)tex1Dfetch(TR, index*w +bi)+d_d1[2]*(int)tex1Dfetch(TR, index*w +bi+1));	
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			ans_R[index*ww +i]=(unsigned char)temp;
-			e_aft+=temp;
-		}
-		/*
+		norm_factor =  ((float)ori_sum*2.0/3.0) / (float)aft_sum;
 		for(int i=0; i<ww; ++i){
-			if(i%2==0) ans_R[index +i]=row0[3*i/2];
-			else ans_R[index +i]=row1[3*(i-1)/2 +2];
-			e_aft+=(int)ans_R[index +i];
-		}*/
-		R_rate=(float)e_aft/((float)R_ori*2.0/3.0);
-		index=(round+tid)*ww;
-		if(R_rate<1.0){
-			#pragma unroll
-			for(int i=0; i<ww; ++i){
-				temp=(int)ans_R[index +i];
-				temp=(int)((float)temp/R_rate);
-				if(temp>255) temp=255;
-				else if(temp<0) temp=0;
-				temp_R[index +i]=ans_R[index +i]=(unsigned char)temp;
-			}
+			temp0 = clamp ( (int) ((float)ans_R[row_aft_index_base +i] * norm_factor) );
+			temp_R[row_aft_index_base + i]=ans_R[row_aft_index_base + i] = (unsigned char)temp0;
 		}
-		else{
-			#pragma unroll
-			for(int i=0; i<ww; ++i){
-				temp=(int)ans_R[index +i];
-				temp=(int)((float)temp/R_rate);
-				temp_R[index +i]=ans_R[index +i]=(unsigned char)temp;
-			}
-		}
-		////////////////////// green //////////////////////////////
-		//setup_row(row0, row1, w, round+tid, TG);
-		/*
-		index=(round+tid)*w;
-		temp=(int)(d_d0[1]*(int)tex1Dfetch(TG, index +0)+d_d0[2]*(int)tex1Dfetch(TG, index +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row0[0]=(unsigned char)temp;
 
-		temp=(int)(d_d1[1]*(int)tex1Dfetch(TG, index)+d_d1[2]*(int)tex1Dfetch(TR, index +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row1[0]=(unsigned char)temp;
-
-		temp=(int)(d_d0[0]*(int)tex1Dfetch(TG, index +w-2)+d_d0[1]*(int)tex1Dfetch(TG, index +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row0[w-1]=(unsigned char)temp;
-
-		temp=(int)(d_d1[0]*(int)tex1Dfetch(TG, index +w-2)+d_d1[1]*(int)tex1Dfetch(TG, index +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row1[w-1]=(unsigned char)temp;
+		ori_sum = 0;
+		aft_sum = 0;
+		ori_index_offset = 0;
+		aft_index_offset = 0;
 
 		#pragma unroll
-		for(int i=1; i<w-1; ++i){
-			temp=(int)(d_d0[0]*(int)tex1Dfetch(TG, index +i-1)+d_d0[1]*(int)tex1Dfetch(TG, index +i)+d_d0[2]*(int)tex1Dfetch(TG, index +i+1));
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			row0[i]=(unsigned char)temp;
-				
-			temp=(int)(d_d1[0]*(int)tex1Dfetch(TG, index +i-1)+d_d1[1]*(int)tex1Dfetch(TG, index +i)+d_d1[2]*(int)tex1Dfetch(TG, index +i+1));	
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			row1[i]=(unsigned char)temp;
-		}*/
-		// setup_row() finish
+		for(; aft_index_offset <= ww-2; ori_index_offset += 3, aft_index_offset += 2){
 
-		e_aft=0;
-		index=(round+tid);
+			ori_piece[0] = tex1Dfetch(TG, row_ori_index_base + ori_index_offset);
+			ori_piece[1] = tex1Dfetch(TG, row_ori_index_base + ori_index_offset + 1);
+			ori_piece[2] = tex1Dfetch(TG, row_ori_index_base + ori_index_offset + 2);
+			ori_sum += (int)ori_piece[0] + (int)ori_piece[1] + (int)ori_piece[2];
 
-		// i==0
-		temp=(int)(d_d0[1]*(int)tex1Dfetch(TG, index*w)+d_d0[2]*(int)tex1Dfetch(TG, index*w +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		ans_G[index*ww]=(unsigned char)temp;
-		e_aft+=temp;
-		
-		#pragma unroll
-		for(int i=2; i<=ww-2; i+=2){
-			bi=3*i/2;
-			temp=(int)(d_d0[0]*(int)tex1Dfetch(TG, index*w +bi-1)+d_d0[1]*(int)tex1Dfetch(TG, index*w +bi)+d_d0[2]*(int)tex1Dfetch(TG, index*w +bi+1));
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			ans_G[index*ww +i]=(unsigned char)temp;
-			e_aft+=temp;
+			temp0 = clamp (
+				d_d0[0]*(int)ori_piece[0] +
+				d_d0[1]*(int)ori_piece[1] +
+				d_d0[2]*(int)ori_piece[2] );
+
+			temp1 = clamp(
+				d_d1[0]*(int)ori_piece[0] +
+				d_d1[1]*(int)ori_piece[1] +
+				d_d1[2]*(int)ori_piece[2]);
+
+			ans_G[row_aft_index_base + aft_index_offset] = (unsigned char)temp0;
+			ans_G[row_aft_index_base + aft_index_offset + 1] = (unsigned char)temp1;
+			aft_sum += (int)temp0 + (int)temp1;
 		}
 
-		// i==ww-1
-		temp=(int)(d_d1[0]*(int)tex1Dfetch(TG, index*w +w-2)+d_d1[1]*(int)tex1Dfetch(TG, index*w +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		ans_G[index*ww +ww-1]=(unsigned char)temp;
-		e_aft+=temp;
-
-		#pragma unroll
-		for(int i=1; i<=ww-3; i+=2){
-			bi=3*(i-1)/2 +2;
-			temp=(int)(d_d1[0]*(int)tex1Dfetch(TG, index*w +bi-1)+d_d1[1]*(int)tex1Dfetch(TG, index*w +bi)+d_d1[2]*(int)tex1Dfetch(TG, index*w +bi+1));	
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			ans_G[index*ww +i]=(unsigned char)temp;
-			e_aft+=temp;
-		}
-		/*
-		#pragma unroll
-		for(int i=0; i<w*2/3; ++i){
-			if(i%2==0) ans_G[index +i]=row0[3*i/2];
-			else ans_G[index +i]=row1[3*(i-1)/2 +2];
-			e_aft+=(int)ans_G[index +i];
-		}*/
-		index=(round+tid)*ww;
-		G_rate=(float)e_aft/((float)G_ori*2.0/3.0);
-		if(G_rate<1.0){
-			#pragma unroll
-			for(int i=0; i<ww; ++i){
-				temp=(int)ans_G[index +i];
-				temp=(int)((float)temp/G_rate);
-				if(temp>255) temp=255;
-				else if(temp<0) temp=0;
-				temp_G[index +i]=ans_G[index +i]=(unsigned char)temp;
-			}
-		}
-		else{
-			#pragma unroll
-			for(int i=0; i<ww; ++i){
-				temp=(int)ans_G[index +i];
-				temp=(int)((float)temp/G_rate);
-				temp_G[index +i]=ans_G[index +i]=(unsigned char)temp;
-			}
+		norm_factor =  ((float)ori_sum*2.0/3.0) / (float)aft_sum;
+		for(int i=0; i<ww; ++i){
+			temp0 = clamp ( (int) ((float)ans_G[row_aft_index_base +i] * norm_factor) );
+			temp_G[row_aft_index_base + i] = ans_G[row_aft_index_base + i] = (unsigned char)temp0;
 		}
 		
-		////////////////////////// blue ////////////////////////////
-		//setup_row(row0, row1, w, round+tid, TB);
-		/*
-		index=(round+tid)*w;
-		temp=(int)(d_d0[1]*(int)tex1Dfetch(TB, index)+d_d0[2]*(int)tex1Dfetch(TB, index +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row0[0]=(unsigned char)temp;
-
-		temp=(int)(d_d1[1]*(int)tex1Dfetch(TB, index +0)+d_d1[2]*(int)tex1Dfetch(TB, index +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row1[0]=(unsigned char)temp;
-
-		temp=(int)(d_d0[0]*(int)tex1Dfetch(TB, index +w-2)+d_d0[1]*(int)tex1Dfetch(TB, index +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row0[w-1]=(unsigned char)temp;
-	
-		temp=(int)(d_d1[0]*(int)tex1Dfetch(TB, index +w-2)+d_d1[1]*(int)tex1Dfetch(TB, index +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		row1[w-1]=(unsigned char)temp;
-	
-		#pragma unroll
-		for(int i=1; i<w-1; ++i){
-			temp=(int)(d_d0[0]*(int)tex1Dfetch(TB, index +i-1)+d_d0[1]*(int)tex1Dfetch(TB, index +i)+d_d0[2]*(int)tex1Dfetch(TB, index +i+1));
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			row0[i]=(unsigned char)temp;
-	
-			temp=(int)(d_d1[0]*(int)tex1Dfetch(TB, index +i-1)+d_d1[1]*(int)tex1Dfetch(TB, index +i)+d_d1[2]*(int)tex1Dfetch(TB, index +i+1));	
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			row1[i]=(unsigned char)temp;
-		}*/
-		// setup_row() finish
-
-		e_aft=0;
-		index=round+tid;
-		// i==0
-		temp=(int)(d_d0[1]*(int)tex1Dfetch(TB, index*w)+d_d0[2]*(int)tex1Dfetch(TB, index*w +1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		ans_B[index*ww]=(unsigned char)temp;
-		e_aft+=temp;
-		
-		#pragma unroll
-		for(int i=2; i<=ww-2; i+=2){
-			bi=3*i/2;
-			temp=(int)(d_d0[0]*(int)tex1Dfetch(TB, index*w +bi-1)+d_d0[1]*(int)tex1Dfetch(TB, index*w +bi)+d_d0[2]*(int)tex1Dfetch(TB, index*w +bi+1));
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			ans_B[index*ww +i]=(unsigned char)temp;
-			e_aft+=temp;
-		}
-
-		// i==ww-1
-		temp=(int)(d_d1[0]*(int)tex1Dfetch(TB, index*w +w-2)+d_d1[1]*(int)tex1Dfetch(TB, index*w +w-1));
-		if(temp>255) temp=255;
-		else if(temp<0) temp=0;
-		ans_B[index*ww +ww-1]=(unsigned char)temp;
-		e_aft+=temp;
+		ori_sum = 0;
+		aft_sum = 0;
+		ori_index_offset = 0;
+		aft_index_offset = 0;
 
 		#pragma unroll
-		for(int i=1; i<=ww-3; i+=2){
-			bi=3*(i-1)/2 +2;
-			temp=(int)(d_d1[0]*(int)tex1Dfetch(TB, index*w +bi-1)+d_d1[1]*(int)tex1Dfetch(TB, index*w +bi)+d_d1[2]*(int)tex1Dfetch(TB, index*w +bi+1));	
-			if(temp>255) temp=255;
-			else if(temp<0) temp=0;
-			ans_B[index*ww +i]=(unsigned char)temp;
-			e_aft+=temp;
+		for(; aft_index_offset <= ww-2; ori_index_offset += 3, aft_index_offset += 2){
+
+			ori_piece[0] = tex1Dfetch(TB, row_ori_index_base + ori_index_offset);
+			ori_piece[1] = tex1Dfetch(TB, row_ori_index_base + ori_index_offset + 1);
+			ori_piece[2] = tex1Dfetch(TB, row_ori_index_base + ori_index_offset + 2);
+			ori_sum += (int)ori_piece[0] + (int)ori_piece[1] + (int)ori_piece[2];
+
+			temp0 = clamp (
+				d_d0[0]*(int)ori_piece[0] +
+				d_d0[1]*(int)ori_piece[1] +
+				d_d0[2]*(int)ori_piece[2] );
+
+			temp1 = clamp(
+				d_d1[0]*(int)ori_piece[0] +
+				d_d1[1]*(int)ori_piece[1] +
+				d_d1[2]*(int)ori_piece[2]);
+
+			ans_B[row_aft_index_base + aft_index_offset] = (unsigned char)temp0;
+			ans_B[row_aft_index_base + aft_index_offset + 1] = (unsigned char)temp1;
+			aft_sum += (int)temp0 + (int)temp1;
 		}
-		/*
-		index=(round+tid)*w*2/3;
-		#pragma unroll
-		for(int i=0; i<w*2/3; ++i){
-			if(i%2==0) ans_B[index +i]=row0[3*i/2];
-			else ans_B[index +i]=row1[3*(i-1)/2 +2];
-			e_aft+=ans_B[index +i];
-		}*/
-		index=(round+tid)*ww;
-		B_rate=(float)e_aft/((float)B_ori*2.0/3.0);
-		if(B_rate<1.0){
-			#pragma unroll
-			for(int i=0; i<ww; ++i){
-				temp=(int)ans_B[index +i];
-				temp=(int)((float)temp/B_rate);
-				if(temp>255) temp=255;
-				else if(temp<0) temp=0;
-				temp_B[index +i]=ans_B[index +i]=(unsigned char)temp;
-			}
+
+		norm_factor =  ((float)ori_sum*2.0/3.0) / (float)aft_sum;
+		for(int i=0; i<ww; ++i){
+			temp0 = clamp ( (int) ((float)ans_B[row_aft_index_base +i] * norm_factor) );
+			temp_B[row_aft_index_base + i] = ans_B[row_aft_index_base + i] = (unsigned char)temp0;
 		}
-		else{
-			#pragma unroll
-			for(int i=0; i<ww; ++i){
-				temp=(int)ans_B[index +i];
-				temp=(int)((float)temp/B_rate);
-				temp_B[index +i]=ans_B[index +i]=(unsigned char)temp;
-			}
-		}
-		
 	}
 }
 
@@ -773,8 +586,9 @@ void SR_kernel_down(
 	unsigned char *ori_R, unsigned char *ori_G, unsigned char *ori_B,
 	unsigned char *aft_R, unsigned char *aft_G, unsigned char *aft_B,
 	int w, int h){
-	float d0[3]={-0.022, 0.974, 0.227};
-	float d1[3]={0.227, 0.974, -0.022};
+
+	float d0[3]={0.227, 0.974, -0.022};
+	float d1[3]={-0.022, 0.974, 0.227};
 
 	unsigned char *R, *G, *B;
 	unsigned char *ans_R, *ans_G, *ans_B;
