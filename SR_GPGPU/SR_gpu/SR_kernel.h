@@ -2,7 +2,7 @@
 
 void SR_kernel_up(unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, int, int, int, int);
 void SR_kernel_down(unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, int, int);
-void SR_kernel_find_neighbor(unsigned char *,unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, int , int, int, int, uchar4*);
+void SR_kernel_find_neighbor(unsigned char *,unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, unsigned char *, int , int, int, int, uchar4*);
 void SR_kernel_start(int, int, int, int);
 void SR_kernel_end();
 /*

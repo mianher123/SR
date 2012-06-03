@@ -115,7 +115,6 @@ void SR_kernel_find_neighbor(
 	unsigned char *I_R, unsigned char *I_G, unsigned char *I_B,
 	unsigned char *L_R, unsigned char *L_G, unsigned char *L_B,
 	unsigned char *H_R, unsigned char *H_G, unsigned char *H_B,
-	unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B,
 	int w, int h, int ww, int hh, uchar4* tex){
 	
 	//int *d_IR, *d_IG, *d_IB; // img(up)
@@ -168,7 +167,7 @@ void SR_kernel_find_neighbor(
 	cudaBindTextureToArray(THG, d_HG);
 	cudaBindTextureToArray(THB, d_HB);
 
-	int threads=1024;
+	int threads=300;
 	int blocks=64;
 	//for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
 	for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
