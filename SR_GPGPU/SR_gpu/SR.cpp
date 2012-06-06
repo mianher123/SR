@@ -1,25 +1,27 @@
 #include "all_lib.h"
 
 // OpenGL Globals
-GLuint texture;
-GLuint pbo;
-unsigned char texture_map [256][256][4];
-struct cudaGraphicsResource* cuda_resource;
+GLuint texture, texture_trivial;
+GLuint pbo, pbo_trivial;
+//unsigned char texture_map [256][256][4];
+struct cudaGraphicsResource *cuda_resource, *cuda_resource_trivial;
 
 CvCapture *capture;
 int fps;
+bool pause;
 
 using namespace cv;
 
 void renderScene(void);
+void processNormalKeys(unsigned char key, int x, int y);
 
 
 int main(int argc, char** argv){
   
-	int w=540;
-	int h=405;
+	int w=480;
+	int h=360;
     // load the AVI file
-	capture = cvCaptureFromAVI("C:\\Users\\dada\\Desktop\\GPU_Image\\SRvideo1.avi");
+	capture = cvCaptureFromAVI("C:\\Users\\dada\\Desktop\\GPU_Image\\Koala tickle.avi");
 
     // always check
     if( !capture ) return 1;
@@ -28,11 +30,11 @@ int main(int argc, char** argv){
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowPosition(100,100);
-	glutInitWindowSize(w,h);
+	glutInitWindowSize(2*w,h);
 	glutCreateWindow("Lighthouse3D - GLUT Tutorial");
 
 	// set orthographic projection
-	gluOrtho2D(0.0, 1.0, 0.0, 1.0);
+	gluOrtho2D(0.0, 2.0, 0.0, 1.0);
 
 	// enable texture
 	glEnable(GL_TEXTURE_2D);
@@ -60,6 +62,27 @@ int main(int argc, char** argv){
 
 	cudaGraphicsGLRegisterBuffer(&cuda_resource, pbo, cudaGraphicsRegisterFlagsWriteDiscard);
 
+
+
+
+	glGenTextures(1, &texture_trivial);
+	glBindTexture(GL_TEXTURE_2D, texture_trivial);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	
+
+	glGenBuffers(1, &pbo_trivial);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_trivial);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, w*h*4, NULL, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+	cudaGraphicsGLRegisterBuffer(&cuda_resource_trivial, pbo_trivial, cudaGraphicsRegisterFlagsWriteDiscard);
+
+	pause = false;
+	glutKeyboardFunc(processNormalKeys);
+
 	// register callbacks
 	glutDisplayFunc(renderScene);
 	glutIdleFunc(renderScene);
@@ -67,16 +90,19 @@ int main(int argc, char** argv){
 }
 
 void renderScene(void){
+	if(pause){return;}
+
 	//uchar4* tex;
 
 	IplImage *pImg;
 	// get a frame 
     pImg = cvQueryFrame( capture );
+	//pImg = cvQueryFrame( capture );
        
     // always check 
     if( !pImg ) printf("error\n");
 
-	//char *ImageName = "C:\\Users\\dada\\Desktop\\GPU_Image\\Koala.jpg";
+	//char *ImageName = "C:\\Users\\dada\\Desktop\\GPU_Image\\Koala_mySR.jpg";
 	//char *ImageName = "C:\\Users\\dada\\Desktop\\GPU_Image\\Flower.jpg";
 
 	//IplImage *pImg2;
@@ -112,15 +138,13 @@ void renderScene(void){
 	unsigned char *aft_G=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
 	unsigned char *aft_B=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
 	
-	unsigned char *ans_R=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
-	unsigned char *ans_G=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
-	unsigned char *ans_B=(unsigned char*)malloc(sizeof(unsigned char)*ww*hh);
-
 	//int *test;
-	uchar4* tex;
+	uchar4 *tex, *tex_trivial;
 	size_t num_bytes;
 	cudaGraphicsMapResources(1, &cuda_resource);
 	cudaGraphicsResourceGetMappedPointer((void**)&tex, &num_bytes, cuda_resource);
+	cudaGraphicsMapResources(1, &cuda_resource_trivial);
+	cudaGraphicsResourceGetMappedPointer((void**)&tex_trivial, &num_bytes, cuda_resource_trivial);
 
 	//SR_kernel_start(w, h, ww, hh, test);
 	
@@ -137,13 +161,13 @@ void renderScene(void){
 	//down(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h);
 	SR_kernel_down(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h);
 	Down=clock();
-	SR_kernel_up(aft_R, aft_G, aft_B, DownUp_R, DownUp_G, DownUp_B, w*2/3, h*2/3, w, h);
+	SR_kernel_up(aft_R, aft_G, aft_B, DownUp_R, DownUp_G, DownUp_B, w*2/3, h*2/3, w, h, tex_trivial);
 	//up(aft_R, aft_G, aft_B, DownUp_R, DownUp_G, DownUp_B, w*2/3, h*2/3, w, h);
 	
 	/******* run 1.5x upsample *******/
 	Up=clock();
 	//up(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h, ww, hh);
-	SR_kernel_up(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h, ww, hh);
+	SR_kernel_up(ori_R, ori_G, ori_B, aft_R, aft_G, aft_B, w, h, ww, hh, tex_trivial);
 	
 
 	/*******************************************************
@@ -185,14 +209,13 @@ void renderScene(void){
 	SR_kernel_find_neighbor(aft_R, aft_G, aft_B,
 							DownUp_R, DownUp_G, DownUp_B,
 							H_R, H_G, H_B,
-							ans_R, ans_G, ans_B,
 							w, h, ww, hh, tex);
 	end=clock();
 
 	printf("error1: %s\n", cudaGetErrorString(cudaPeekAtLastError()));
 
 	cudaGraphicsUnmapResources(1, &cuda_resource, 0);
-
+	cudaGraphicsUnmapResources(1, &cuda_resource_trivial, 0);
 
 
 	std::cout << std::dec << "Down time: " << 1000.0*(double)(Down-start)/(double)CLOCKS_PER_SEC << " ms" << std::endl;
@@ -242,8 +265,13 @@ void renderScene(void){
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ww, hh, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
-	
 
+	glBindTexture(GL_TEXTURE_2D, texture_trivial);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, pbo_trivial);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ww, hh, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	
 	glClear(GL_COLOR_BUFFER_BIT);
 	glEnable(GL_TEXTURE_2D);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
@@ -255,6 +283,16 @@ void renderScene(void){
 			glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 0.0);
 		glEnd();
 	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glBindTexture(GL_TEXTURE_2D, texture_trivial);
+		glBegin(GL_QUADS);
+			glTexCoord2f(0.0, 1.0); glVertex2f(1.0, 0.0);
+			glTexCoord2f(0.0, 0.0); glVertex2f(1.0, 1.0);
+			glTexCoord2f(1.0, 0.0); glVertex2f(2.0, 1.0);
+			glTexCoord2f(1.0, 1.0); glVertex2f(2.0, 0.0);
+		glEnd();
+	glBindTexture(GL_TEXTURE_2D, 0);
+
 	glDisable(GL_TEXTURE_2D);
 
 	glutSwapBuffers();
@@ -276,4 +314,15 @@ void renderScene(void){
 
 	//cvWaitKey( 1000 / fps );
 	return;
+}
+
+
+void glutKeyboardFunc (unsigned char key, int x, int y);
+
+void processNormalKeys(unsigned char key, int x, int y) {
+
+	if (key == 'q')
+		pause = true;
+	else if (key == 'p')
+		pause = false;
 }

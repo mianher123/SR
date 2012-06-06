@@ -19,9 +19,10 @@ __device__ int calc_dist(
 		texture<unsigned char, 2, cudaReadModeElementType> TI, texture<unsigned char, 2, cudaReadModeElementType> TL){
 	int dist=0;
 	int dtex;
-	for(int j=0; j<3; ++j){
-		for(int i=0; i<3; ++i){
-			dtex=(int)tex2D(TI, x+i, y+j)-(int)tex2D(TL, low_x+i, low_y+j);
+
+	for(int t=0; t<3; ++t){
+		for(int k=0; k<3; ++k){
+			dtex=(int)tex2D(TI, x+k, y+t)-(int)tex2D(TL, low_x+k, low_y+t);
 			dist+=dtex*dtex;
 		}
 	}
@@ -38,84 +39,111 @@ __global__ void find_neighbor(
 	int round,
 	int w, int h, int ww, int hh, uchar4 *final_ans_ptr){
 	char* final_ans = (char*)final_ans_ptr;
-	int tid=blockDim.x * blockIdx.x + threadIdx.x;
+	//int tid=blockDim.x * blockIdx.x + threadIdx.x;
 	//int tidy=blockDim.y * blockIdx.y + threadIdx.y;
-	if( round+tid<(hh/3)*(ww/3) ){
-		int x=((round+tid)%(ww/3))*3;
-		int y=((round+tid)/(ww/3))*3;
+	int tid = threadIdx.x;
+	int bid = blockIdx.x;
+
+	if( round+bid<(hh/3) && tid<ww ){
+		__shared__ unsigned char map_I[1024*3];
+		__shared__ unsigned char map_L[1024*5];
 		
-		int low_x=x*2/3;
-		int low_y=y*2/3;
-		int min_R=585526; // 255*255*9=585525
-		//int min_G=585526;
-		//int min_B=585526;
-		int min_pos_R[2];
-		//int min_pos_G[2];
-		//int min_pos_B[2];
-		
-		for(int j=-1; j<=1; ++j){ // find neighbor in 3*3 block
-			for(int i=-1; i<=1; ++i){
-				if( low_x+i>=0 && low_x+i<=w-3 && low_y+j>=0 && low_y+j<=h-3 ){
-					min_R=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_R, min_pos_R, TIR, TLR);
-					//min_G=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_G, min_pos_G, TIG, TLG);
-					//min_B=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_B, min_pos_B, TIB, TLB);
-				}
+		int y=(round+bid)*3;
+		map_I[tid]=tex2D(TIR, tid, y);
+		map_I[tid +ww]=tex2D(TIR, tid, y+1);
+		map_I[tid +2*ww]=tex2D(TIR, tid, y+2);
+
+		if(tid<w){
+			if(y==0){
+				map_L[tid +w]=tex2D(TLR, tid, 0);
+				map_L[tid +2*w]=tex2D(TLR, tid, 1);
+				map_L[tid +3*w]=tex2D(TLR, tid, 2);
+				map_L[tid +4*w]=tex2D(TLR, tid, 3);
+			}
+			else{
+				map_L[tid]=tex2D(TLR, tid, y*2/3-1);
+				map_L[tid +w]=tex2D(TLR, tid, y*2/3);
+				map_L[tid +2*w]=tex2D(TLR, tid, y*2/3+1);
+				map_L[tid +3*w]=tex2D(TLR, tid, y*2/3+2);
+				map_L[tid +4*w]=tex2D(TLR, tid, y*2/3+3);
 			}
 		}
+		__syncthreads();
+
+		if(tid<ww/3){
+			int x=(tid)*3;	
+			int low_x=x*2/3;
+			int low_y=y*2/3;
+			int min_R=585526; // 255*255*9=585525
+			//int min_G=585526;
+			//int min_B=585526;
+			int min_pos_R[2];
+			//int min_pos_G[2];
+			//int min_pos_B[2];
+			int dtex;
+			int dist;
 		
-		int mmm, nnn;
-		for(int j=0; j<3; ++j){
-			for(int i=0; i<3; ++i){
-				mmm=(int)tex2D(THR, min_pos_R[0]+i, min_pos_R[1]+j);
-				nnn=(int)tex2D(TIR, x+i, y+j);
-				mmm+=nnn;
-				if(mmm>255) mmm=255;
-				else if(mmm<0) mmm=0;
-				final_ans[((y+j)*ww +x+i)*4]=(unsigned char)mmm;
+			for(int j=0; j<=2; ++j){ // find neighbor in 3*3 block
+				for(int i=0; i<=2; ++i){
+					if( low_x+i-1>=0 && low_x+i-1<=w-3 && low_y+j-1>=0 && low_y+j-1<=h-3 ){
+						dist=0;
+						for(int t=0; t<3; ++t){
+							for(int k=0; k<3; ++k){
+								dtex=(int)map_I[t*ww +k]-(int)map_L[(j+t)*w +i+k];
+								dist+=dtex*dtex;
+							}
+						}
 
-				mmm=(int)tex2D(THG, min_pos_R[0]+i, min_pos_R[1]+j);
-				nnn=(int)tex2D(TIG, x+i, y+j);
-				mmm+=nnn;
-				if(mmm>255) mmm=255;
-				else if(mmm<0) mmm=0;
-				final_ans[((y+j)*ww +x+i)*4 +1]=(unsigned char)mmm;
+						if(dist<min_R){
+							min_pos_R[0]=low_x+i-1;
+							min_pos_R[1]=low_y+j-1;
+							min_R=dist;
+						}
 
-				mmm=(int)tex2D(THB, min_pos_R[0]+i, min_pos_R[1]+j);
-				nnn=(int)tex2D(TIB, x+i, y+j);
-				mmm+=nnn;
-				if(mmm>255) mmm=255;
-				else if(mmm<0) mmm=0;
-				final_ans[((y+j)*ww +x+i)*4 +2]=(unsigned char)mmm;
-				/*
-				dans_R[(y+j)*ww +x+i]=tex2D(THR, min_pos_R[0]+i, min_pos_R[1]+j)+tex2D(TIR, x+i, y+j);
-				dans_G[(y+j)*ww +x+i]=tex2D(THG, min_pos_R[0]+i, min_pos_R[1]+j)+tex2D(TIG, x+i, y+j);
-				dans_B[(y+j)*ww +x+i]=tex2D(THB, min_pos_R[0]+i, min_pos_R[1]+j)+tex2D(TIB, x+i, y+j);
+						//min_R=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_R, min_pos_R, TIR, TLR);
+						//min_G=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_G, min_pos_G, TIG, TLG);
+						//min_B=calc_dist(x, y, low_x+i, low_y+j, w, ww, min_B, min_pos_B, TIB, TLB);
+					}
+				}
+			}
+		
+			int mmm, nnn;
+			for(int j=0; j<3; ++j){
+				for(int i=0; i<3; ++i){
+					mmm=(int)tex2D(THR, min_pos_R[0]+i, min_pos_R[1]+j);
+					nnn=(int)tex2D(TIR, x+i, y+j);
+					mmm+=nnn;
+					if(mmm>255) mmm=255;
+					else if(mmm<0) mmm=0;
+					final_ans[((y+j)*ww +x+i)*4]=(unsigned char)mmm;
+						
+					mmm=(int)tex2D(THG, min_pos_R[0]+i, min_pos_R[1]+j);
+					nnn=(int)tex2D(TIG, x+i, y+j);
+					mmm+=nnn;
+					if(mmm>255) mmm=255;
+					else if(mmm<0) mmm=0;
+					final_ans[((y+j)*ww +x+i)*4 +1]=(unsigned char)mmm;
 
-				if( dans_R[(y+j)*ww +x+i]>255 ) dans_R[(y+j)*ww +x+i]=255;
-				else if( dans_R[(y+j)*ww +x+i]<0 ) dans_R[(y+j)*ww +x+i]=0;
-				if( dans_G[(y+j)*ww +x+i]>255 ) dans_G[(y+j)*ww +x+i]=255;
-				else if( dans_G[(y+j)*ww +x+i]<0 ) dans_G[(y+j)*ww +x+i]=0;
-				if( dans_B[(y+j)*ww +x+i]>255 ) dans_B[(y+j)*ww +x+i]=255;
-				else if( dans_B[(y+j)*ww +x+i]<0 ) dans_B[(y+j)*ww +x+i]=0;
+					mmm=(int)tex2D(THB, min_pos_R[0]+i, min_pos_R[1]+j);
+					nnn=(int)tex2D(TIB, x+i, y+j);
+					mmm+=nnn;
+					if(mmm>255) mmm=255;
+					else if(mmm<0) mmm=0;
+					final_ans[((y+j)*ww +x+i)*4 +2]=(unsigned char)mmm;
 
-				final_ans[((y+j)*ww +x+i)*4 +0]=(unsigned char)dans_R[(y+j)*ww +x+i];
-				final_ans[((y+j)*ww +x+i)*4 +1]=(unsigned char)dans_G[(y+j)*ww +x+i];
-				final_ans[((y+j)*ww +x+i)*4 +2]=(unsigned char)dans_B[(y+j)*ww +x+i];
-				*/
-				final_ans[((y+j)*ww +x+i)*4 +3]=(unsigned char)255;
-				
+					final_ans[((y+j)*ww +x+i)*4 +3]=(unsigned char)255;
+				}
 			}
 		}
 	}
 	
-	__syncthreads();
+	//__syncthreads();
 }
 
 void SR_kernel_find_neighbor(
 	unsigned char *I_R, unsigned char *I_G, unsigned char *I_B,
 	unsigned char *L_R, unsigned char *L_G, unsigned char *L_B,
 	unsigned char *H_R, unsigned char *H_G, unsigned char *H_B,
-	unsigned char *ans_R, unsigned char *ans_G, unsigned char *ans_B,
 	int w, int h, int ww, int hh, uchar4* tex){
 	
 	//int *d_IR, *d_IG, *d_IB; // img(up)
@@ -128,16 +156,6 @@ void SR_kernel_find_neighbor(
 	//cudaMalloc((void**)&final_ans, ww*hh*4*sizeof(char));
 	cudaChannelFormatDesc Desc=cudaCreateChannelDesc<unsigned char>();
 	cudaArray *d_IR, *d_IG, *d_IB, *d_LR, *d_LG, *d_LB, *d_HR, *d_HG, *d_HB;
-	/*
-	cudaChannelFormatDesc Desc2=cudaCreateChannelDesc<unsigned char>();
-	cudaChannelFormatDesc Desc3=cudaCreateChannelDesc<unsigned char>();
-	cudaChannelFormatDesc Desc4=cudaCreateChannelDesc<unsigned char>();
-	cudaChannelFormatDesc Desc5=cudaCreateChannelDesc<unsigned char>();
-	cudaChannelFormatDesc Desc6=cudaCreateChannelDesc<unsigned char>();
-	cudaChannelFormatDesc Desc7=cudaCreateChannelDesc<unsigned char>();
-	cudaChannelFormatDesc Desc8=cudaCreateChannelDesc<unsigned char>();
-	cudaChannelFormatDesc Desc9=cudaCreateChannelDesc<unsigned char>();
-	*/
 	cudaMallocArray(&d_IR, &Desc, ww, hh);
 	cudaMallocArray(&d_IG, &Desc, ww, hh);
 	cudaMallocArray(&d_IB, &Desc, ww, hh);
@@ -158,6 +176,7 @@ void SR_kernel_find_neighbor(
 	cudaMemcpyToArray(d_HG, 0, 0, H_G, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
 	cudaMemcpyToArray(d_HB, 0, 0, H_B, w*h*sizeof(unsigned char), cudaMemcpyHostToDevice);
 
+
 	cudaBindTextureToArray(TIR, d_IR);
 	cudaBindTextureToArray(TIG, d_IG);
 	cudaBindTextureToArray(TIB, d_IB);
@@ -169,10 +188,10 @@ void SR_kernel_find_neighbor(
 	cudaBindTextureToArray(THB, d_HB);
 
 	int threads=1024;
-	int blocks=64;
+	int blocks=256;
 	//for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
-	for(int i=0; i<((ww/3)*(hh/3)-1)/(threads*blocks) +1; ++i){
-		find_neighbor<<<blocks, threads>>>(i*threads*blocks, w, h, ww, hh, tex);
+	for(int i=0; i<((hh/3)-1)/(blocks) +1; ++i){
+		find_neighbor<<<blocks, threads>>>(i*blocks, w, h, ww, hh, tex);
 		
 		//printf("error1: %s\n", cudaGetErrorString(cudaPeekAtLastError()));
 		//printf("error2: %s\n", cudaGetErrorString(cudaThreadSynchronize()));
